@@ -116,6 +116,10 @@ fn main() {
     // Watched, because a library built the other way would link wrong.
     println!("cargo:rerun-if-env-changed=GGML_BACKEND_DL");
     println!("cargo:rerun-if-env-changed=GGML_CPU_ALL_VARIANTS");
+    println!("cargo:rerun-if-env-changed=GGML_NATIVE");
+    println!("cargo:rerun-if-env-changed=GGML_FMA");
+    println!("cargo:rerun-if-env-changed=GGML_AVX2");
+    println!("cargo:rerun-if-env-changed=GGML_BMI2");
     let backend_dl = env::var("GGML_BACKEND_DL").is_ok_and(|value| {
         matches!(
             value.to_ascii_uppercase().as_str(),

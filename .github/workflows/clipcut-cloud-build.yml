@@ -60,8 +60,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: /tmp/clipcut-target
-          key: clipcut-arch-target-v1-${{ hashFiles('src/Cargo.lock', 'src/Cargo.toml', 'src/patches/i-slint-renderer-skia/**') }}
+          key: clipcut-arch-target-v2-${{ hashFiles('src/Cargo.lock', 'src/Cargo.toml', 'src/patches/i-slint-renderer-skia/**', 'src/patches/whisper-rs-sys/build.rs') }}
           restore-keys: |
+            clipcut-arch-target-v2-
             clipcut-arch-target-v1-
 
       - name: Build ClipCut binary in Arch Linux container
@@ -79,7 +80,21 @@ jobs:
               cd /work/src
               export CARGO_HOME=/cargo-home
               export CARGO_TARGET_DIR=/cargo-target
+              export CFLAGS="-march=ivybridge"
+              export CXXFLAGS="-march=ivybridge"
+              export GGML_NATIVE=OFF
+              export GGML_SSE42=ON
+              export GGML_AVX=ON
+              export GGML_F16C=ON
+              export GGML_AVX2=OFF
+              export GGML_BMI2=OFF
+              export GGML_FMA=OFF
+              export GGML_AVX512=OFF
               export RUSTFLAGS="-C target-cpu=ivybridge -C link-arg=-fuse-ld=lld"
+
+              if grep -rq 'GGML_FMA:BOOL=ON' /cargo-target/cloud/build/whisper-rs-sys-* 2>/dev/null; then
+                rm -rf /cargo-target/cloud/build/whisper-rs-sys-* /cargo-target/cloud/deps/libwhisper_rs*
+              fi
 
               # Build workspace engine crates across all 4 runner vCPUs first
               CARGO_BUILD_JOBS=4 cargo build --profile cloud \
