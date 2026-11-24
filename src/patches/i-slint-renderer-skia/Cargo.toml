@@ -134,6 +134,9 @@ version = "0.1"
 version = "0.153.3"
 features = ["gl"]
 
+[dependencies.skrifa]
+version = "0.44"
+
 [dependencies.spin_on]
 version = "0.1"
 optional = true

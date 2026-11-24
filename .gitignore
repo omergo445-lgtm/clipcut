@@ -1,3 +1,5 @@
 src/target/
 vendor/
 bin/clipcut-bin
+bin/clipcut-bin.new
+bin/.clipcut-bin.etag

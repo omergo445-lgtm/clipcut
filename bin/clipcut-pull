@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+RELEASE_URL="https://github.com/omergo445-lgtm/clipcut/releases/download/latest-clipcut/clipcut-bin"
+DEST="/home/omer/Projects/clipcut/bin/clipcut-bin"
+ETAG_FILE="/home/omer/Projects/clipcut/bin/.clipcut-bin.etag"
+TMP_FILE="${DEST}.new"
+ICON="/home/omer/.local/share/icons/hicolor/256x256/apps/clipcut.png"
+
+notify() {
+  if command -v notify-send >/dev/null 2>&1; then
+    notify-send -a "ClipCut" -i "$ICON" "$1" "$2" >/dev/null 2>&1 || true
+  fi
+}
+
+fetch_remote_etag() {
+  curl -fsSLI --connect-timeout 2 --max-time 4 "$RELEASE_URL" 2>/dev/null \
+    | awk 'tolower($1) == "etag:" { etag = $2 } END { gsub(/\r/, "", etag); print etag }'
+}
+
+if [[ "${1:-}" == "--if-updated" ]]; then
+  REMOTE_ETAG="$(fetch_remote_etag || true)"
+  if [[ -x "$DEST" ]]; then
+    if [[ -z "$REMOTE_ETAG" ]]; then
+      exit 0
+    fi
+    LOCAL_ETAG="$(cat "$ETAG_FILE" 2>/dev/null || true)"
+    if [[ "$REMOTE_ETAG" == "$LOCAL_ETAG" ]]; then
+      exit 0
+    fi
+  fi
+  notify "Updating ClipCut..." "Downloading latest cloud build from GitHub..."
+else
+  REMOTE_ETAG="$(fetch_remote_etag || true)"
+fi
+
+echo "Downloading latest ClipCut build..."
+curl -fL --progress-bar "$RELEASE_URL" -o "$TMP_FILE"
+chmod +x "$TMP_FILE"
+mv -f "$TMP_FILE" "$DEST"
+if [[ -n "${REMOTE_ETAG:-}" ]]; then
+  printf '%s\n' "$REMOTE_ETAG" > "$ETAG_FILE"
+fi
+if [[ "${1:-}" == "--if-updated" ]]; then
+  notify "ClipCut Updated" "Launching the latest version."
+fi
+echo "Done! Ready to run."

@@ -1090,64 +1090,84 @@ impl GlyphRenderer for SkiaItemRenderer<'_> {
         &mut self,
         font: &sharedparley::parley::FontData,
         font_size: PhysicalLength,
-        _normalized_coords: &[i16],
+        normalized_coords: &[i16],
         synthesis: &fontique::Synthesis,
         brush: Self::PlatformBrush,
         y_offset: sharedparley::PhysicalLength,
         glyphs_it: &mut dyn Iterator<Item = sharedparley::parley::layout::Glyph>,
     ) {
-        let Some(type_face) = crate::font_cache::FONT_CACHE
-            .with_borrow_mut(|font_cache| font_cache.font_with_variations(font, synthesis))
-        else {
-            return;
-        };
-        let mut font = skia_safe::Font::from_typeface(type_face, font_size.get());
-        // Concat: glyphs sit on whole pixels on a low-density screen. Skia's
-        // subpixel positioning puts a stem between two pixels and the
-        // rasteriser smears it over both, which on a 1x Windows desk read as
-        // blurred text (jub0t/concat#278); on a high-density screen the
-        // smear is a fraction of a hairline and the spacing is worth more.
-        // Hinting is left to Skia's default, which snaps stems on its own
-        // once positions are whole.
-        //
-        // LCD coverage where the surface drawn into names a subpixel order -
-        // the Windows window with ClearType on (wgpu_30_surface/dx12.rs) -
-        // and greyscale everywhere else. Asked for only there: on a surface
-        // with no order Skia makes greyscale out of LCD rendering, which on
-        // macOS turns on CoreText's font smoothing and draws every word
-        // heavier than it does today. Inside an opacity layer on that window
-        // the layer has no order, so Skia draws the text greyscale itself.
-        //
-        // The surface's props, not the top layer's: skia-safe's `top_props`
-        // calls SkCanvas::getTopProps, which returns a struct by value, and
-        // on MSVC a C++ method passes `this` and the return slot in the other
-        // order from the one Rust calls it with - Skia read a garbage `this`
-        // and the window crashed on its first frame of text. `props` fills
-        // an out-parameter and returns a bool, which both sides agree on.
         let dense = self.scale_factor.get() >= 1.5;
-        font.set_subpixel(dense);
-        let lcd = self
-            .canvas
-            .props()
-            .is_some_and(|props| props.pixel_geometry() != skia_safe::PixelGeometry::Unknown);
-        font.set_edging(if lcd {
-            skia_safe::font::Edging::SubpixelAntiAlias
-        } else {
-            skia_safe::font::Edging::AntiAlias
+        let hinted = !dense;
+        let blob: i_slint_common::sharedfontique::HashedBlob = font.data.clone().into();
+        let (size_26_6, snapped_ppem, coords_hash, style_hash, shear) =
+            crate::font_cache::GlyphOutlineCache::style_keys(
+                font_size.get(),
+                normalized_coords,
+                synthesis,
+                hinted,
+            );
+
+        let mut run_builder =
+            skia_safe::PathBuilder::new_with_fill_type(skia_safe::PathFillType::Winding);
+        let mut fallback_glyphs: Vec<(skia_safe::GlyphId, skia_safe::Point)> = Vec::new();
+        let y_off = y_offset.get();
+
+        crate::font_cache::GLYPH_OUTLINE_CACHE.with_borrow_mut(|outline_cache| {
+            for g in glyphs_it {
+                let gx = g.x;
+                let gy = if dense { g.y + y_off } else { (g.y + y_off).round() };
+                match outline_cache.glyph_outline(
+                    &blob,
+                    font,
+                    size_26_6,
+                    snapped_ppem,
+                    normalized_coords,
+                    coords_hash,
+                    style_hash,
+                    shear,
+                    hinted,
+                    g.id,
+                ) {
+                    crate::font_cache::CachedGlyph::Path(glyph_path) => {
+                        run_builder.add_path_with_offset(&glyph_path, (gx, gy), None);
+                    }
+                    crate::font_cache::CachedGlyph::Blank => {}
+                    crate::font_cache::CachedGlyph::ColorOrBitmapFallback => {
+                        fallback_glyphs.push((g.id as skia_safe::GlyphId, skia_safe::Point::new(gx, gy)));
+                    }
+                }
+            }
         });
 
-        let (glyph_ids, glyph_positions): (Vec<_>, Vec<_>) = glyphs_it
-            .into_iter()
-            .map(|g| (g.id as skia_safe::GlyphId, skia_safe::Point::new(g.x, g.y + y_offset.get())))
-            .unzip();
+        if !run_builder.is_empty() {
+            let run_path = run_builder.detach();
+            let mut paint = brush.clone();
+            paint.set_anti_alias(true);
+            if synthesis.embolden() && paint.style() == skia_safe::PaintStyle::Fill {
+                paint.set_style(skia_safe::PaintStyle::StrokeAndFill);
+                paint.set_stroke_width((snapped_ppem * 0.03).max(0.4));
+                paint.set_stroke_join(skia_safe::PaintJoin::Round);
+            }
+            self.canvas.draw_path(&run_path, &paint);
+        }
 
-        self.canvas.draw_glyphs_at(
-            &glyph_ids,
-            skia_safe::canvas::GlyphPositions::Points(&glyph_positions),
-            skia_safe::Point::default(),
-            &font,
-            &brush,
-        );
+        if !fallback_glyphs.is_empty()
+            && let Some(type_face) = crate::font_cache::FONT_CACHE
+                .with_borrow_mut(|font_cache| font_cache.font_with_variations(font, synthesis))
+        {
+            let mut sk_font = skia_safe::Font::from_typeface(type_face, font_size.get());
+            sk_font.set_subpixel(dense);
+            sk_font.set_edging(skia_safe::font::Edging::AntiAlias);
+            let (glyph_ids, glyph_positions): (Vec<_>, Vec<_>) =
+                fallback_glyphs.into_iter().unzip();
+            self.canvas.draw_glyphs_at(
+                &glyph_ids,
+                skia_safe::canvas::GlyphPositions::Points(&glyph_positions),
+                skia_safe::Point::default(),
+                &sk_font,
+                &brush,
+            );
+        }
     }
 
     fn fill_rectangle(

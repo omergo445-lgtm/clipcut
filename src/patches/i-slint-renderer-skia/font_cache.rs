@@ -103,6 +103,183 @@ impl FontCache {
     }
 }
 
+use skrifa::{
+    FontRef, GlyphId, MetadataProvider,
+    instance::{LocationRef, NormalizedCoord, Size},
+    outline::{
+        DrawSettings, Engine, HintingInstance, HintingOptions, OutlinePen, SmoothMode, Target,
+    },
+};
+
+const HINTER_CACHE_CAPACITY: NonZeroUsize = NonZeroUsize::new(32).unwrap();
+const GLYPH_CACHE_CAPACITY: NonZeroUsize = NonZeroUsize::new(4096).unwrap();
+
+#[derive(Clone)]
+pub enum CachedGlyph {
+    Path(skia_safe::Path),
+    Blank,
+    ColorOrBitmapFallback,
+}
+
+struct SkiaOutlinePen<'a> {
+    builder: &'a mut skia_safe::PathBuilder,
+    shear: f32,
+}
+
+impl OutlinePen for SkiaOutlinePen<'_> {
+    fn move_to(&mut self, x: f32, y: f32) {
+        self.builder.move_to((x + y * self.shear, -y));
+    }
+
+    fn line_to(&mut self, x: f32, y: f32) {
+        self.builder.line_to((x + y * self.shear, -y));
+    }
+
+    fn quad_to(&mut self, cx0: f32, cy0: f32, x: f32, y: f32) {
+        self.builder.quad_to(
+            (cx0 + cy0 * self.shear, -cy0),
+            (x + y * self.shear, -y),
+        );
+    }
+
+    fn curve_to(&mut self, cx0: f32, cy0: f32, cx1: f32, cy1: f32, x: f32, y: f32) {
+        self.builder.cubic_to(
+            (cx0 + cy0 * self.shear, -cy0),
+            (cx1 + cy1 * self.shear, -cy1),
+            (x + y * self.shear, -y),
+        );
+    }
+
+    fn close(&mut self) {
+        self.builder.close();
+    }
+}
+
+pub struct GlyphOutlineCache {
+    hinters: CLruCache<(HashedBlob, u32, u32, u64), Option<HintingInstance>>,
+    glyphs: CLruCache<(HashedBlob, u32, u32, u64, u32), CachedGlyph>,
+}
+
+impl Default for GlyphOutlineCache {
+    fn default() -> Self {
+        Self {
+            hinters: CLruCache::new(HINTER_CACHE_CAPACITY),
+            glyphs: CLruCache::new(GLYPH_CACHE_CAPACITY),
+        }
+    }
+}
+
+impl GlyphOutlineCache {
+    pub fn style_keys(
+        font_size: f32,
+        normalized_coords: &[i16],
+        synthesis: &fontique::Synthesis,
+        hinted: bool,
+    ) -> (u32, f32, u64, u64, f32) {
+        let size_26_6 = (font_size.max(0.5) * 64.0).round() as u32;
+        let snapped_ppem = size_26_6 as f32 / 64.0;
+        let shear = synthesis.skew().map_or(0.0, |deg| deg.to_radians().tan());
+
+        let mut coords_hasher = DefaultHasher::new();
+        normalized_coords.hash(&mut coords_hasher);
+        let coords_hash = coords_hasher.finish();
+
+        let mut style_hasher = DefaultHasher::new();
+        coords_hash.hash(&mut style_hasher);
+        shear.to_bits().hash(&mut style_hasher);
+        hinted.hash(&mut style_hasher);
+        let style_hash = style_hasher.finish();
+
+        (size_26_6, snapped_ppem, coords_hash, style_hash, shear)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn glyph_outline(
+        &mut self,
+        blob: &HashedBlob,
+        font: &parley::FontData,
+        size_26_6: u32,
+        snapped_ppem: f32,
+        normalized_coords: &[i16],
+        coords_hash: u64,
+        style_hash: u64,
+        shear: f32,
+        hinted: bool,
+        glyph_id: u32,
+    ) -> CachedGlyph {
+        let glyph_key = (blob.clone(), font.index, size_26_6, style_hash, glyph_id);
+        if let Some(cached) = self.glyphs.get(&glyph_key) {
+            return cached.clone();
+        }
+
+        let Ok(font_ref) = FontRef::from_index(font.data.as_ref(), font.index) else {
+            self.glyphs.put(glyph_key, CachedGlyph::ColorOrBitmapFallback);
+            return CachedGlyph::ColorOrBitmapFallback;
+        };
+
+        let gid = GlyphId::from(glyph_id);
+        if font_ref.color_glyphs().get(gid).is_some() {
+            self.glyphs.put(glyph_key, CachedGlyph::ColorOrBitmapFallback);
+            return CachedGlyph::ColorOrBitmapFallback;
+        }
+
+        let outlines = font_ref.outline_glyphs();
+        let Some(outline_glyph) = outlines.get(gid) else {
+            self.glyphs.put(glyph_key, CachedGlyph::ColorOrBitmapFallback);
+            return CachedGlyph::ColorOrBitmapFallback;
+        };
+
+        let coords: Vec<NormalizedCoord> =
+            normalized_coords.iter().copied().map(NormalizedCoord::from_bits).collect();
+        let location = LocationRef::new(&coords);
+        let size = Size::new(snapped_ppem);
+
+        let mut builder =
+            skia_safe::PathBuilder::new_with_fill_type(skia_safe::PathFillType::Winding);
+        let mut pen = SkiaOutlinePen { builder: &mut builder, shear };
+
+        let drew = if hinted {
+            let hinter_key = (blob.clone(), font.index, size_26_6, coords_hash);
+            let hinter_opt = if let Some(existing) = self.hinters.get(&hinter_key) {
+                existing.clone()
+            } else {
+                let options = HintingOptions {
+                    engine: Engine::AutoFallback,
+                    target: Target::Smooth {
+                        mode: SmoothMode::Normal,
+                        symmetric_rendering: true,
+                        preserve_linear_metrics: true,
+                    },
+                };
+                let created = HintingInstance::new(&outlines, size, location, options).ok();
+                self.hinters.put(hinter_key, created.clone());
+                created
+            };
+
+            if let Some(ref hinter) = hinter_opt {
+                outline_glyph
+                    .draw(DrawSettings::hinted(hinter, false), &mut pen)
+                    .or_else(|_| outline_glyph.draw(DrawSettings::unhinted(size, location), &mut pen))
+                    .is_ok()
+            } else {
+                outline_glyph.draw(DrawSettings::unhinted(size, location), &mut pen).is_ok()
+            }
+        } else {
+            outline_glyph.draw(DrawSettings::unhinted(size, location), &mut pen).is_ok()
+        };
+
+        let entry = if !drew || builder.is_empty() {
+            CachedGlyph::Blank
+        } else {
+            CachedGlyph::Path(builder.detach())
+        };
+
+        self.glyphs.put(glyph_key, entry.clone());
+        entry
+    }
+}
+
 thread_local! {
-    pub static FONT_CACHE: RefCell<FontCache> = RefCell::new(Default::default())
+    pub static FONT_CACHE: RefCell<FontCache> = RefCell::new(Default::default());
+    pub static GLYPH_OUTLINE_CACHE: RefCell<GlyphOutlineCache> = RefCell::new(Default::default());
 }
