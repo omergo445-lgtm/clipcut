@@ -31,10 +31,12 @@ jobs:
         working-directory: src
         env:
           CARGO_BUILD_JOBS: "1"
-          CARGO_PROFILE_RELEASE_OPT_LEVEL: "1"
+          CARGO_PROFILE_RELEASE_OPT_LEVEL: "0"
           CARGO_PROFILE_RELEASE_CODEGEN_UNITS: "1"
           CARGO_PROFILE_RELEASE_LTO: "off"
           CARGO_PROFILE_RELEASE_DEBUG: "0"
+          CARGO_PROFILE_RELEASE_STRIP: "symbols"
+          RUSTFLAGS: "-C target-cpu=ivybridge -C link-arg=-fuse-ld=lld -C codegen-units=1"
         run: |
           cargo build --release -p concat
 
