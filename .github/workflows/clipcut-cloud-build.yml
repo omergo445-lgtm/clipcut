@@ -11,43 +11,69 @@ permissions:
 jobs:
   build-arch:
     runs-on: ubuntu-latest
-    container:
-      image: archlinux:latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install Arch build tools
+      - name: Free disk space and add up to 34 GB swap
         run: |
-          pacman -Syu --noconfirm base-devel rustup clang cmake ffmpeg fontconfig freetype2 alsa-lib libxkbcommon wayland pkgconf lld git curl github-cli
-          rustup default stable
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL /usr/local/share/boost
+          sudo swapoff -a || true
+          sudo rm -f /mnt/swapfile /swapfile
 
-      - name: Cache Cargo crates
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: src
+          ROOT_AVAIL_GB=$(df -BG --output=avail / | tail -1 | tr -dc '0-9')
+          MNT_AVAIL_GB=$([ -d /mnt ] && df -BG --output=avail /mnt | tail -1 | tr -dc '0-9' || echo 0)
 
-      - name: Build ClipCut binary
-        working-directory: src
-        env:
-          CARGO_BUILD_JOBS: "1"
-          CARGO_PROFILE_RELEASE_OPT_LEVEL: "0"
-          CARGO_PROFILE_RELEASE_CODEGEN_UNITS: "1"
-          CARGO_PROFILE_RELEASE_LTO: "off"
-          CARGO_PROFILE_RELEASE_DEBUG: "0"
-          CARGO_PROFILE_RELEASE_STRIP: "symbols"
-          RUSTFLAGS: "-C target-cpu=ivybridge -C link-arg=-fuse-ld=lld -C codegen-units=1"
+          if mountpoint -q /mnt && [ "$MNT_AVAIL_GB" -ge 36 ]; then
+            SWAP_PATH="/mnt/swapfile"
+            SWAP_GB=34
+          elif [ "$ROOT_AVAIL_GB" -ge 54 ]; then
+            SWAP_PATH="/swapfile"
+            SWAP_GB=34
+          else
+            SWAP_PATH="/swapfile"
+            SWAP_GB=$((ROOT_AVAIL_GB - 20))
+            [ "$SWAP_GB" -lt 8 ] && SWAP_GB=8
+          fi
+
+          echo "Creating ${SWAP_GB}G swap at ${SWAP_PATH} (root free: ${ROOT_AVAIL_GB}G, /mnt free: ${MNT_AVAIL_GB}G)"
+          sudo fallocate -l "${SWAP_GB}G" "$SWAP_PATH"
+          sudo chmod 600 "$SWAP_PATH"
+          sudo mkswap "$SWAP_PATH"
+          sudo swapon "$SWAP_PATH"
+          free -h
+          df -h / /mnt
+
+      - name: Build ClipCut binary in Arch Linux container
         run: |
-          cargo build --release -p concat
+          docker run --rm \
+            -v "${{ github.workspace }}:/work" \
+            -w /work \
+            archlinux:latest \
+            bash -euo pipefail -c '
+              pacman -Syu --noconfirm base-devel rustup clang cmake ffmpeg fontconfig freetype2 alsa-lib libxkbcommon wayland pkgconf lld git curl
+              rustup default stable
+              cd /work/src
+              export CARGO_BUILD_JOBS=2
+              export CARGO_PROFILE_RELEASE_OPT_LEVEL=1
+              export CARGO_PROFILE_RELEASE_LTO=off
+              export CARGO_PROFILE_RELEASE_DEBUG=0
+              export CARGO_PROFILE_RELEASE_STRIP=symbols
+              export RUSTFLAGS="-C target-cpu=ivybridge -C link-arg=-fuse-ld=lld"
+              cargo build --release -p concat
+              cp /work/src/target/release/concat /work/clipcut-bin
+              chmod 755 /work/clipcut-bin
+            '
 
       - name: Publish rolling release binary
-        run: |
-          cp src/target/release/concat /tmp/clipcut-bin
-          chmod +x /tmp/clipcut-bin
-          gh release create latest-clipcut /tmp/clipcut-bin \
-            --repo "${{ github.repository }}" \
-            --title "Latest ClipCut Build" \
-            --notes "Built in cloud for Arch Linux (ivybridge)." \
-            --clobber
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh release view latest-clipcut --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            gh release upload latest-clipcut ./clipcut-bin --repo "${{ github.repository }}" --clobber
+          else
+            gh release create latest-clipcut ./clipcut-bin \
+              --repo "${{ github.repository }}" \
+              --title "Latest ClipCut Build" \
+              --notes "Built in cloud for Arch Linux (ivybridge)."
+          fi
