@@ -1,0 +1,266 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-FileCopyrightText: 2026 Jareer Abdullah
+
+// The dark palette — the colours the interface is made of, and one of the two
+// files in the tree allowed to name one.
+//
+// `theme.slint` next door picks between this and `light.slint` on a single
+// property. Nothing else in the tree knows a colour by anything but its name
+// in `Theme`, so a value changed here changes it everywhere and nowhere else
+// needs touching.
+//
+// ── what a palette has to keep ───────────────────────────────────────────────
+//
+// The values are not a list of favourite colours; they are a set of
+// relationships, and a fork that keeps them will look like a theme rather than
+// a recolour. This is where they are written down; the light palette answers
+// the same list, and its header only says where it had to answer differently.
+// The load-bearing ones:
+//
+//   - `page` is under every surface, and stays there. The panes float on it,
+//     and the gap between what a pane is and what the ground is *is* the
+//     gutter — there are no outlines doing that job any more.
+//   - The surface ladder `well < panel < raised < field < field-hover <
+//     field-active` only means anything as a ladder. Each step exists to be
+//     told from the one under it: a sunken well inside a panel, a raised card
+//     on it, a field on the card, and the two answers a field gives a pointer.
+//     Move them together or not at all. What the ladder is measuring is
+//     prominence, and here prominence happens to run towards white; that is
+//     the one thing about it a light palette cannot copy.
+//   - Each accent's `on` is the ink that sits *on* it, and it is dark because
+//     the accent is bright. Swap an accent for a dark one and its ink has to
+//     become light in the same edit, or every activated control loses its
+//     label — which is exactly what the light palette does. The same pairing
+//     holds for `on-green` and `on-scrim`.
+//   - The five media kinds are pairs: a vivid mark and the darker same-hue
+//     ground it sits on. A card in the bin and the clip it becomes on a track
+//     wear the same pair, which is what makes them read as one object moved.
+//   - The lanes are *darker* than the pane they are in. A timeline is a well
+//     the clips sit in, and lanes brighter than the pane make the empty
+//     stretches read as content.
+//   - The clip-ink family holds against all five kind hues, not against a
+//     grey. It cannot be borrowed from the text colours for that reason.
+//
+// ── the palette ──────────────────────────────────────────────────────────────
+//
+// The surfaces are a flat neutral grey scale with no blue cast. A tinted
+// ground competes with everything placed on it; a neutral one lets the accent
+// and the clip hues carry all of the colour in the window.
+//
+// The clip and media-kind hues and the meter ramp name things the engine and
+// the project format also name, so they are fixed by what they mean rather
+// than by the surfaces around them.
+import { Accent } from "accent.slint";
+
+export global Dark {
+    // surfaces
+    //
+    // Panels are a grey that visibly floats on the darker ground — never the
+    // ground colour itself, or the panes melt into the window and their
+    // grab-able gutters vanish.
+    //
+    // A panel is judged as a ground, by whole panes painted in it rather than
+    // by narrow strips, and a near-black one is a stop too dark at that size:
+    // the whole ladder sits in the mid-dark greys a desktop editor's window
+    // is made of, with the page under it and the lanes under the panel.
+    //
+    // Holding the panel up leaves room underneath, so `well` is genuinely
+    // sunken — darker than the surface it is cut into, which is how a sunken
+    // thing reads without having to be explained.
+    //
+    // The whole ladder moves together, not just the panel. Each step exists
+    // to be told apart from the one under it — a raised card has to read as
+    // raised, a field has to read as a field on top of that — so lifting the
+    // panel without lifting the rest would close those gaps instead of moving
+    // them. Only `page` stays where it is: it is the ground the panes float
+    // on, and holding it down is what widens the gutters as the panes lighten.
+    //
+    // The panes carry no outlines. An outline would do part of the work of
+    // separating a pane from the ground; without one the value step has to do
+    // all of it, and a darker ladder leaves the panes reading as holes in the
+    // window rather than as surfaces on it.
+    // Deep Obsidian Carbon surface ladder
+    out property <color> panel: #13151a;
+    out property <color> raised: #1a1d24;
+    out property <color> well: #0d0f13;
+    out property <color> field: #222630;
+    out property <color> field-hover: #2c313e;
+    out property <color> field-active: #373d4d;
+
+    // Launch screen deep obsidian ladder
+    out property <color> launch-page: #060709;
+    out property <color> launch-panel: #101217;
+    out property <color> launch-well: #0a0b0e;
+    out property <color> launch-raised: #171a21;
+    out property <color> launch-field: #1f232c;
+    out property <color> launch-field-active: #2a2f3b;
+
+    // hairlines — subtle specular glass edges
+    out property <color> line: #ffffff17;
+    out property <color> line-strong: #ffffff2e;
+
+    // text
+    out property <color> fg: #f4f6fa;
+    out property <color> fg-muted: #9da4b3;
+    out property <color> fg-dim: #646b7a;
+    out property <color> fg-hot: #ffffff;
+
+    // accents — Ice Cyan default, Frost White logo match, Violet, Rose, Amber, Mint
+    out property <[Accent]> accents: [
+        { accent: #38bdf8, hover: #7dd3fc, soft: #38bdf833, on: #04131d },   // cyan (default)
+        { accent: #eef3f8, hover: #ffffff, soft: #eef3f82e, on: #0b0d12 },   // frost (logo match)
+        { accent: #a78bfa, hover: #c4b5fd, soft: #a78bfa33, on: #190d33 },   // violet
+        { accent: #fb7185, hover: #fda4af, soft: #fb718533, on: #330714 },   // rose
+        { accent: #fbbf24, hover: #fcd34d, soft: #fbbf2433, on: #291800 },   // amber
+        { accent: #34d399, hover: #6ee7b7, soft: #34d39933, on: #042419 },   // mint
+    ];
+    out property <color> green: #34d399;
+    out property <color> on-green: #042419;
+    /// A warning's amber: the amber accent's own, so the one amber in the
+    /// window is the one amber in the palette, and clear of the meters'
+    /// yellow and of `danger`.
+    out property <color> warn: #fbbf24;
+
+    // The Rail's dragger — crisp luminous chip on the obsidian groove
+    out property <color> grip: #e6ebf2;
+    out property <color> grip-active: #ffffff;
+    out property <color> grip-edge: #000000a6;
+
+    // meter ramp
+    out property <color> meter-low: #34c759;
+    out property <color> meter-mid: #ffd60a;
+    out property <color> meter-high: #ff453a;
+
+    // media kinds
+    //
+    // Each kind gets a vivid mark and the darker same-hue ground it sits on.
+    // The pair is deliberately shared with the timeline: a card in the bin and
+    // the clip it becomes on a track are the same two colours, so they read as
+    // one object moved rather than two things that happen to have the same
+    // name.
+    //
+    // The marks are a step down from the brand's vivid five: they are the
+    // header strip of every clip and the ground of every card's badge, and
+    // at full chroma a stack of eight tracks shouts. Darker, they still say
+    // the kind and let the white ink on them read.
+    out property <color> kind-video: #3373d1;
+    out property <color> kind-video-well: #142238;
+    // Green, and a step off the lime accent so a selected sound clip still
+    // reads as selected; the waveform below is a wash of this hue.
+    out property <color> kind-audio: #34c46f;
+    out property <color> kind-audio-well: #12301c;
+    out property <color> kind-image: #9f63d6;
+    out property <color> kind-image-well: #2a1e34;
+    out property <color> kind-text: #cf5a99;
+    out property <color> kind-text-well: #321c29;
+    // A filter layer is not a medium — nothing was imported to make one —
+    // so it wears a hue none of the four media kinds has: an indigo, bluer
+    // than the image kind's violet by enough to tell the two bars apart on
+    // a stack, and the colour every editor's users already read as "a look
+    // laid over the picture".
+    out property <color> kind-filter: #6d63e8;
+    out property <color> kind-filter-well: #23204a;
+    // The other bars over the picture each take a bright hue none of the
+    // rest has, as vivid as the shape's amber and the sound layer's teal:
+    // an effect coral, something happening to the picture; an adjustment
+    // layer fuchsia, a grade and not a look, and clear of the video's blue
+    // it is stacked over; a transition lime, a join between shots.
+    out property <color> kind-effect: #f2674f;
+    out property <color> kind-effect-well: #3d1913;
+    out property <color> kind-adjustment: #d153e0;
+    out property <color> kind-adjustment-well: #36173b;
+    out property <color> kind-transition: #8fc23a;
+    out property <color> kind-transition-well: #24300f;
+    // A shape wears amber: warm where every medium is cool, so a square
+    // over the picture is told from the picture's own clips at a glance,
+    // and the colour the consumer editors already give their shapes.
+    out property <color> kind-shape: #d4a24b;
+    out property <color> kind-shape-well: #3a2d14;
+    // A sound layer wears teal: a filter's kin, as cool as one, and
+    // between the sound's green and the picture's blue, for a treatment
+    // laid over what is heard rather than one more thing heard.
+    out property <color> kind-sound-layer: #2bb3a8;
+    out property <color> kind-sound-layer-well: #10302d;
+
+    // timeline
+    //
+    // The lanes are darker than `panel`, not lighter: the timeline is a well
+    // the clips sit in, and a lane brighter than the pane would make the empty
+    // stretches read as content. `lane-alt` is the banded neighbour that keeps
+    // a stack of eight tracks countable without a rule between every pair.
+    //
+    // Two tones, alternating, and neither of them black. Both follow the
+    // panel ladder up: they are the floor of a pane, and a floor that stays
+    // put while the walls lift stops reading as part of the same room. Pitch black made the
+    // grid do all of the work: it answers "where in time" but never "which
+    // lane", so an eight-track stack had to be counted from the headers every
+    // time. Banding answers the second question for free, and the grid keeps
+    // answering the first — they are different axes and both are wanted.
+    //
+    // Black also cost the clips their mount. A dark neutral a few steps up
+    // still reads as a well cut into the pane, and a clip's own dark ground
+    // now sits *on* something rather than floating in a hole. Both stay well
+    // under `panel`, or the empty stretches would read as content.
+    out property <color> lane: #0e1014;
+    out property <color> lane-alt: #111419;
+    out property <color> ruler: #0b0c10;
+    out property <color> grid: #ffffff1f;
+    // Electric Cyan playhead matching ClipCut's default accent
+    out property <color> playhead: #38bdf8;
+    // Drawn on the audio clip's own dark ground, so it is a light wash of the
+    // kind's hue rather than the vivid mark itself.
+    out property <color> wave: #a7f0c2b3;      // 0.7 alpha
+    // The same wash in the video's blue, for the sound band under a
+    // video's frames: the band is the video's, not a sound clip's.
+    out property <color> wave-video: #a9c8f5b3; // 0.7 alpha
+    // The part of a bar over the hot line: an amber that reads as a
+    // warning on the green and on the blue alike, short of the red a
+    // clip's own meter keeps for clipping.
+    out property <color> wave-hot: #ffb340d9;   // 0.85 alpha
+    // the last decibel under full scale, and past it: clipping.
+    out property <color> wave-clip: #ff453ae6;  // 0.9 alpha, the meters' red
+
+    // clip ink
+    out property <color> clip-ink: #ffffff;
+    /// A title's words in the body of its clip. Warm and dimmed, so they read
+    /// as the content of the clip rather than as a second label.
+    out property <color> clip-body: #ffe4b2b8;
+    /// The chip a clip wears when effects are live on it.
+    out property <color> clip-chip: #00000040;
+    /// The floor line a drawn envelope stands on.
+    out property <color> wave-centre: #ffffff2e;
+    /// A song's beats along its clip: ticks up from the floor.
+    out property <color> beat-mark: #ffffffa6;
+    out property <color> beat-rail-ground: #00000066;
+    out property <color> beat-bar: #ffc53d;
+    /// A fade: the wedge of what is being taken away, and the bright line of
+    /// the envelope itself over it.
+    out property <color> fade-shade: #00000073;
+    out property <color> fade-edge: #ffffffa6;
+    /// The two halves of a transition's wedge pair — the outgoing clip and
+    /// the incoming one, which is why they are not the same white.
+    out property <color> transition-in: #ffffffcc;
+    out property <color> transition-out: #ffffff73;
+
+    // the monitor
+    out property <color> stage: #000000;
+    out property <color> on-stage-dim: #ffffff6b;
+    out property <color> sample-ground: #1c1f27;
+
+    // The sheet that covers the window behind a dialog.
+    out property <color> overlay: #030407b3;
+
+    // Chips that sit on artwork instead of on a panel
+    out property <color> scrim: #00000099;
+    out property <color> on-scrim: #ffffff;
+
+    // destructive
+    out property <color> danger: #ff453a;
+    out property <color> danger-soft: #ff453a24;
+    out property <color> danger-wash: #2a1214;
+    out property <color> danger-edge: #5a2628;
+
+    // window ground the panes float on — deep obsidian carbon
+    out property <color> page: #090a0d;
+    out property <color> page-fg-muted: #9da4b3;
+}

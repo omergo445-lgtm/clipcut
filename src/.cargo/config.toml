@@ -1,0 +1,2 @@
+[build]
+rustflags = ["-C", "target-cpu=ivybridge", "-C", "link-arg=-fuse-ld=lld"]

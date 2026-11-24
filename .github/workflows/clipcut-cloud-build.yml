@@ -1,0 +1,47 @@
+name: ClipCut Cloud Build
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-arch:
+    runs-on: ubuntu-latest
+    container:
+      image: archlinux:latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Arch build tools
+        run: |
+          pacman -Syu --noconfirm base-devel rustup clang cmake ffmpeg fontconfig freetype2 alsa-lib libxkbcommon wayland pkgconf lld git curl github-cli
+          rustup default stable
+
+      - name: Cache Cargo crates
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src
+
+      - name: Build ClipCut binary
+        working-directory: src
+        env:
+          CARGO_PROFILE_RELEASE_LTO: "thin"
+        run: |
+          cargo build --release -p concat
+
+      - name: Publish rolling release binary
+        run: |
+          cp src/target/release/concat /tmp/clipcut-bin
+          chmod +x /tmp/clipcut-bin
+          gh release create latest-clipcut /tmp/clipcut-bin \
+            --repo "${{ github.repository }}" \
+            --title "Latest ClipCut Build" \
+            --notes "Built in cloud for Arch Linux (ivybridge)." \
+            --clobber
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

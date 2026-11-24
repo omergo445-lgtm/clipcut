@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="/home/omer/Projects/clipcut"
+SRC="$ROOT/src"
+BIN="$SRC/target/quick/concat"
+ICON="/home/omer/.local/share/icons/hicolor/512x512/apps/clipcut.png"
+
+needs_build=0
+if [[ ! -x "$BIN" ]]; then
+    needs_build=1
+else
+    # Fast check: did any Rust, Slint, locale, or Cargo source file change since the last build?
+    if find "$SRC/crates" "$SRC/Cargo.toml" \
+        \( -name "*.rs" -o -name "*.slint" -o -name "Cargo.toml" -o -name "en.json" \) \
+        -newer "$BIN" -print -quit 2>/dev/null | grep -q .; then
+        needs_build=1
+    fi
+fi
+
+if [[ "$needs_build" -eq 1 ]]; then
+    if command -v notify-send >/dev/null 2>&1; then
+        notify-send -i "$ICON" "ClipCut" "Updating ClipCut with your latest changes..." || true
+    fi
+    if ! (cd "$SRC" && LD_LIBRARY_PATH="$ROOT/vendor/clang/usr/lib:${LD_LIBRARY_PATH:-}" nice -n 19 cargo rustc -j 2 --profile quick -p concat --bin concat -- -C link-arg=-B"$ROOT/vendor/bin" -C link-arg=-fuse-ld=lld); then
+        if command -v notify-send >/dev/null 2>&1; then
+            notify-send -u critical -i "$ICON" "ClipCut" "Build failed! Check terminal or logs." || true
+        fi
+        exit 1
+    fi
+fi
+
+exec "$BIN" "$@"
