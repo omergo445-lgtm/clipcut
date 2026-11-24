@@ -81,27 +81,30 @@ jobs:
               export CARGO_TARGET_DIR=/cargo-target
               export RUSTFLAGS="-C target-cpu=ivybridge -C link-arg=-fuse-ld=lld"
 
-              # Build engine & Skia renderer dependencies across all 4 runner vCPUs first
+              # Build workspace engine crates across all 4 runner vCPUs first
               CARGO_BUILD_JOBS=4 cargo build --profile cloud \
-                -p i-slint-renderer-skia \
                 -p concat-host \
                 -p concat-render \
                 -p concat-media \
                 -p concat-text \
                 -p concat-effects \
-                -p concat-export
+                -p concat-export \
+                -p concat-server
 
-              # Build the 970k-line Slint UI binary with bounded concurrency so RAM never spikes
-              CARGO_BUILD_JOBS=2 cargo build --profile cloud -p concat
+              # Build Slint dependencies + the 970k-line UI binary with bounded concurrency
+              CARGO_BUILD_JOBS=2 cargo build --profile cloud --bin concat
 
               cp /cargo-target/cloud/concat /work/clipcut-bin
               chmod 755 /work/clipcut-bin
 
-              # Prune only the leaf binary artifacts so the dependency cache stays compact & warm
+              # Prune only the leaf concat UI artifacts so the dependency cache stays compact & warm
               rm -rf \
                 /cargo-target/cloud/concat \
                 /cargo-target/cloud/concat.d \
+                /cargo-target/cloud/libconcat.rlib \
+                /cargo-target/cloud/libconcat.d \
                 /cargo-target/cloud/deps/concat-* \
+                /cargo-target/cloud/deps/libconcat-* \
                 /cargo-target/cloud/incremental
             '
           sudo chown -R "$(id -u):$(id -g)" /tmp/clipcut-cargo-home /tmp/clipcut-target
