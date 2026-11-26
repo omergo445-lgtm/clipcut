@@ -4,6 +4,35 @@ set -euo pipefail
 BIN="/home/omer/Projects/clipcut/bin/clipcut-bin"
 PULL_SCRIPT="/home/omer/Projects/clipcut/bin/clipcut-pull"
 
+# Ensure ALSA routes through PipeWire when PipeWire is active and pipewire-alsa
+# is not installed system-wide, preventing exclusive hw:0 capture ("Dummy Output").
+RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+ALSA_USER_CONF="${XDG_CONFIG_HOME:-$HOME/.config}/alsa/asoundrc"
+if [[ -S "$RUNTIME_DIR/pipewire-0" ]] \
+  && [[ -f "/usr/lib/alsa-lib/libasound_module_pcm_pipewire.so" ]] \
+  && [[ ! -e "/etc/alsa/conf.d/99-pipewire-default.conf" ]] \
+  && [[ ! -e "/etc/alsa/conf.d/99-pulseaudio-default.conf" ]] \
+  && [[ ! -e "/etc/asound.conf" ]] \
+  && [[ ! -e "$HOME/.asoundrc" ]] \
+  && [[ ! -e "$ALSA_USER_CONF" ]]; then
+  mkdir -p "$(dirname "$ALSA_USER_CONF")"
+  cat > "$ALSA_USER_CONF" <<'EOF'
+pcm.!default {
+    type pipewire
+    playback_node "-1"
+    capture_node  "-1"
+    hint {
+        show on
+        description "Default ALSA Output (currently PipeWire Media Server)"
+    }
+}
+
+ctl.!default {
+    type pipewire
+}
+EOF
+fi
+
 if [[ ! -x "$BIN" ]]; then
   "$PULL_SCRIPT"
 else

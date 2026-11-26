@@ -230,16 +230,13 @@ export component Rail inherits Rectangle {
         border-width: 1px;
         border-color: root.live ? Theme.accent : Theme.grip-edge;
         background: touch.pressed ? Theme.grip-active : Theme.grip;
-        drop-shadow-blur: touch.pressed ? 12px : (root.live ? 7px : 3px);
-        drop-shadow-offset-y: 1px;
-        drop-shadow-color: root.live ? Theme.accent.with-alpha(0.55) : Theme.grip-edge;
 
         animate x {
-            duration: touch.pressed ? 35ms : 140ms;
+            duration: touch.pressed ? 0ms : 110ms;
             easing: cubic-bezier(0.16, 1, 0.3, 1);
         }
-        animate width, height, background, border-color, drop-shadow-blur, drop-shadow-color {
-            duration: 160ms;
+        animate width, height, background, border-color {
+            duration: 110ms;
             easing: cubic-bezier(0.16, 1, 0.3, 1);
         }
     }

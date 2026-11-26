@@ -436,11 +436,9 @@ export component Button inherits Rectangle {
         : (touch.pressed && root.enabled) ? Theme.field-active
         : root.lit ? Theme.field-hover
         : Theme.field;
-    drop-shadow-blur: (root.primary && root.lit) ? 14px : 0px;
-    drop-shadow-color: (root.primary && root.lit) ? Theme.accent.with-alpha(0.35) : Colors.transparent;
 
-    animate background, border-color, drop-shadow-blur, drop-shadow-color {
-        duration: 170ms;
+    animate background, border-color {
+        duration: 120ms;
         easing: cubic-bezier(0.16, 1, 0.3, 1);
     }
 

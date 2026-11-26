@@ -477,11 +477,15 @@ impl Monitor {
             .adapter_info()
             .device_type
             == concat_render::wgpu::DeviceType::Cpu;
-        if software {
-            return;
-        }
+        let _ = software;
+        // ClipCut 512 MB mode: compile effect shader pipelines lazily on demand
+        // when an effect is actually applied, saving ~80–120 MB of Vulkan driver RAM
+        // and keeping startup CPU completely free.
+        let _ = gpu;
+        return;
+        #[allow(unreachable_code)]
         std::thread::Builder::new()
-            .name("concat shader warm-up".to_owned())
+            .name("clipcut shader warm-up".to_owned())
             .spawn(move || {
                 let begun = std::time::Instant::now();
                 let catalogue = concat_effects::Catalogue::builtin();

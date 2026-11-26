@@ -95,8 +95,23 @@ export global Theme {
     /// the backend takes a multiplier, which Rust gives the open window as a
     /// scale-factor event and puts in `SLINT_SCALE_FACTOR` for the next
     /// launch (lib.rs, `on_settings_scale_changed`).
-    /// https://github.com/jub0t/Concat/issues/320
     in-out property <int> ui-scale: 0;
+    /// Surface palette preset:
+    /// 0 = Obsidian (default), 1 = OLED Pitch, 2 = Midnight, 3 = Graphite,
+    /// 4 = Light, 5 = Custom Surface (`surface-custom`).
+    in-out property <int> surface-mode: 0;
+    in-out property <color> surface-custom: #141820;
+    out property <bool> surface-is-custom: surface-mode == 5;
+    /// Corner radius style: 0 = Sharp, 1 = Crisp, 2 = Balanced (default), 3 = Rounded.
+    in-out property <int> corner-style: 2;
+    /// Control density: 0 = Compact, 1 = Comfortable (default), 2 = Spacious.
+    in-out property <int> density: 1;
+    /// Interface font size offset: 0 = Small (-1px), 1 = Default (0px), 2 = Medium (+1px), 3 = Large (+2px).
+    in-out property <int> font-choice: 1;
+    /// Workspace split gutter width: 0 = Seamless, 1 = Tight, 2 = Default, 3 = Airy.
+    in-out property <int> gutter-style: 2;
+    /// Optional 1px crisp outlines around workspace panels.
+    in-out property <bool> panel-borders: false;
 
     // ── type ─────────────────────────────────────────────────────────────
     //
@@ -111,77 +126,100 @@ export global Theme {
     // without touching a single element.
     out property <string> font: "Hanken Grotesk";
     out property <string> font-technical: "Hanken Grotesk";
+    property <length> fs-delta: (font-choice - 1) * 1px;
     /// The scale. `fs` is the body size everything inherits; the two either
     /// side of it are the dense readout and the panel title. `xl` is for the
     /// few lines that are content rather than chrome — a project's name in a
     /// list — and `display` is the launch screen's heading and nothing else.
-    out property <length> fs-xs: 10px;
-    out property <length> fs-sm: 11px;
-    out property <length> fs: 12px;
-    out property <length> fs-lg: 13px;
-    out property <length> fs-xl: 14px;
-    out property <length> fs-input: 15px;
+    out property <length> fs-xs: 10px + fs-delta;
+    out property <length> fs-sm: 11px + fs-delta;
+    out property <length> fs: 12px + fs-delta;
+    out property <length> fs-lg: 13px + fs-delta;
+    out property <length> fs-xl: 14px + fs-delta;
+    out property <length> fs-input: 15px + fs-delta;
     out property <length> fs-display: 34px;
     /// Sentences that wrap - a hint under a control, a note in a dialog.
-    /// Larger than the one-line labels around them, which are read at a
-    /// glance: a paragraph is read word by word, and at 11px, dim, on a
-    /// monitor without high DPI, the strokes break up and the words look
-    /// broken. Paired with `fg-muted`, never the dimmer `fg-dim`.
-    out property <length> fs-prose: 13px;
+    out property <length> fs-prose: 13px + fs-delta;
 
     // The weights the design actually calls for, uncompensated.
-    //
-    // Skia composites glyph coverage with gamma correction, so text comes out
-    // at the weight the tokens name. Do not step these up to make text read
-    // heavier on some screen: that is a renderer compensation (FemtoVG, which
-    // the app no longer builds with, needed 500/600), and under Skia it reads
-    // as too heavy.
-    //
-    // Weight is the one axis that can absorb a renderer difference without
-    // touching a colour token, and every face is bundled, so it costs nothing
-    // at runtime. Reach for it rather than nudging a surface to compensate.
     out property <int> weight-body: 400;
     out property <int> weight-title: 500;
-    /// The launch screen's heading, and the wordmark in the title bar. The one
-    /// weight above `title`, and the only place the type gets to be loud. Bold
-    /// is bundled, so this names it exactly.
     out property <int> weight-display: 700;
 
     // ── shape ────────────────────────────────────────────────────────────
     //
-    // radii
-    out property <length> r-xs: 3px;
-    out property <length> r-sm: 5px;
-    out property <length> r: 7px;
-    out property <length> r-lg: 12px;
+    // radii (driven reactively by `corner-style`)
+    out property <length> r-xs: corner-style == 0 ? 0px : corner-style == 1 ? 2px : corner-style == 2 ? 3px : 5px;
+    out property <length> r-sm: corner-style == 0 ? 0px : corner-style == 1 ? 3px : corner-style == 2 ? 5px : 8px;
+    out property <length> r: corner-style == 0 ? 0px : corner-style == 1 ? 4px : corner-style == 2 ? 7px : 11px;
+    out property <length> r-lg: corner-style == 0 ? 0px : corner-style == 1 ? 6px : corner-style == 2 ? 12px : 18px;
     /// The dialog sheet, and nothing smaller. A modal is the largest rounded
     /// thing in the window and wants a corner to match.
-    out property <length> r-xl: 16px;
+    out property <length> r-xl: corner-style == 0 ? 2px : corner-style == 1 ? 8px : corner-style == 2 ? 16px : 22px;
 
-    // metrics
-    out property <length> h: 28px;        // standard control height
-    out property <length> gap: 6px;
-    out property <length> pad: 14px;      // panel horizontal padding
+    // metrics (driven reactively by `density`)
+    out property <length> h: density == 0 ? 24px : density == 1 ? 28px : 32px;
+    out property <length> gap: density == 0 ? 4px : density == 1 ? 6px : 8px;
+    out property <length> pad: density == 0 ? 10px : density == 1 ? 14px : 18px;
     out property <length> label-w: 62px;
 
     // ── surfaces ─────────────────────────────────────────────────────────
-    out property <color> panel: dark ? Dark.panel : Light.panel;
-    out property <color> raised: dark ? Dark.raised : Light.raised;
-    out property <color> well: dark ? Dark.well : Light.well;
-    out property <color> field: dark ? Dark.field : Light.field;
-    out property <color> field-hover: dark ? Dark.field-hover : Light.field-hover;
-    out property <color> field-active: dark ? Dark.field-active : Light.field-active;
+    out property <color> panel: !dark
+        ? (surface-is-custom ? surface-custom : Light.panel)
+        : surface-mode == 1 ? #0a0b0e
+        : surface-mode == 2 ? #0e1422
+        : surface-mode == 3 ? #1e1e22
+        : surface-is-custom ? surface-custom
+        : Dark.panel;
+    out property <color> raised: !dark
+        ? (surface-is-custom ? surface-custom.brighter(0.06) : Light.raised)
+        : surface-mode == 1 ? #111318
+        : surface-mode == 2 ? #151d30
+        : surface-mode == 3 ? #26262b
+        : surface-is-custom ? surface-custom.brighter(0.22)
+        : Dark.raised;
+    out property <color> well: !dark
+        ? (surface-is-custom ? surface-custom.darker(0.05) : Light.well)
+        : surface-mode == 1 ? #050608
+        : surface-mode == 2 ? #090d17
+        : surface-mode == 3 ? #161619
+        : surface-is-custom ? surface-custom.darker(0.28)
+        : Dark.well;
+    out property <color> field: !dark
+        ? (surface-is-custom ? surface-custom.darker(0.06) : Light.field)
+        : surface-mode == 1 ? #191c24
+        : surface-mode == 2 ? #1d2740
+        : surface-mode == 3 ? #303036
+        : surface-is-custom ? surface-custom.brighter(0.45)
+        : Dark.field;
+    out property <color> field-hover: !dark
+        ? (surface-is-custom ? surface-custom.darker(0.11) : Light.field-hover)
+        : surface-mode == 1 ? #222630
+        : surface-mode == 2 ? #263352
+        : surface-mode == 3 ? #3a3a42
+        : surface-is-custom ? surface-custom.brighter(0.68)
+        : Dark.field-hover;
+    out property <color> field-active: !dark
+        ? (surface-is-custom ? surface-custom.darker(0.16) : Light.field-active)
+        : surface-mode == 1 ? #2c313f
+        : surface-mode == 2 ? #314166
+        : surface-mode == 3 ? #45454f
+        : surface-is-custom ? surface-custom.brighter(0.92)
+        : Dark.field-active;
 
-    // the launch screen's ladder: the same five steps, cut deeper. Read by
-    // start.slint and by the title strip while it is up, and by nothing
-    // else — the editor keeps the ladder above.
-    out property <color> launch-page: dark ? Dark.launch-page : Light.launch-page;
-    out property <color> launch-panel: dark ? Dark.launch-panel : Light.launch-panel;
-    out property <color> launch-well: dark ? Dark.launch-well : Light.launch-well;
-    out property <color> launch-raised: dark ? Dark.launch-raised : Light.launch-raised;
-    out property <color> launch-field: dark ? Dark.launch-field : Light.launch-field;
-    out property <color> launch-field-active:
-        dark ? Dark.launch-field-active : Light.launch-field-active;
+    // the launch screen's ladder: follows the chosen surface mode
+    out property <color> launch-page: !dark
+        ? (surface-is-custom ? surface-custom.darker(0.08) : Light.launch-page)
+        : surface-mode == 1 ? #000000
+        : surface-mode == 2 ? #04070e
+        : surface-mode == 3 ? #0f0f12
+        : surface-is-custom ? surface-custom.darker(0.5)
+        : Dark.launch-page;
+    out property <color> launch-panel: panel;
+    out property <color> launch-well: well;
+    out property <color> launch-raised: raised;
+    out property <color> launch-field: field;
+    out property <color> launch-field-active: field-active;
 
     // hairlines
     out property <color> line: dark ? Dark.line : Light.line;
@@ -195,14 +233,6 @@ export global Theme {
 
     // accents — the chosen row of the palette that is on, spread into the
     // four tokens the tree has always read.
-    //
-    // A custom colour has no row, so its three companions are made from it
-    // the way each palette makes its own: hover is a step towards more
-    // contrast, which is brighter on a dark ground and darker on a light
-    // one; soft is the colour at the palette's wash alpha; and the ink on
-    // it is dark or light by which of the two the colour itself is not.
-    // Perceived lightness rather than the mean of the channels, so a pure
-    // green gets dark ink and a pure blue gets light, as they should.
     out property <float> custom-light:
         (0.299 * accent-custom.red + 0.587 * accent-custom.green + 0.114 * accent-custom.blue) / 255;
     out property <Accent> custom-tone: {
@@ -262,9 +292,27 @@ export global Theme {
     out property <color> kind-sound-layer-well: dark ? Dark.kind-sound-layer-well : Light.kind-sound-layer-well;
 
     // timeline
-    out property <color> lane: dark ? Dark.lane : Light.lane;
-    out property <color> lane-alt: dark ? Dark.lane-alt : Light.lane-alt;
-    out property <color> ruler: dark ? Dark.ruler : Light.ruler;
+    out property <color> lane: !dark
+        ? (surface-is-custom ? surface-custom.darker(0.05) : Light.lane)
+        : surface-mode == 1 ? #050608
+        : surface-mode == 2 ? #0a0e19
+        : surface-mode == 3 ? #17171a
+        : surface-is-custom ? surface-custom.darker(0.24)
+        : Dark.lane;
+    out property <color> lane-alt: !dark
+        ? (surface-is-custom ? surface-custom.darker(0.03) : Light.lane-alt)
+        : surface-mode == 1 ? #08090c
+        : surface-mode == 2 ? #0d1220
+        : surface-mode == 3 ? #1a1a1e
+        : surface-is-custom ? surface-custom.darker(0.14)
+        : Dark.lane-alt;
+    out property <color> ruler: !dark
+        ? (surface-is-custom ? surface-custom.darker(0.07) : Light.ruler)
+        : surface-mode == 1 ? #040507
+        : surface-mode == 2 ? #080b14
+        : surface-mode == 3 ? #141417
+        : surface-is-custom ? surface-custom.darker(0.34)
+        : Dark.ruler;
     out property <color> grid: dark ? Dark.grid : Light.grid;
     /// The palette's own playhead, for the dot in Settings that offers it
     /// back while a picked colour is on.
@@ -321,7 +369,13 @@ export global Theme {
     out property <color> danger-edge: dark ? Dark.danger-edge : Light.danger-edge;
 
     // the window ground the panes float on
-    out property <color> page: dark ? Dark.page : Light.page;
+    out property <color> page: !dark
+        ? (surface-is-custom ? surface-custom.darker(0.08) : Light.page)
+        : surface-mode == 1 ? #000000
+        : surface-mode == 2 ? #060911
+        : surface-mode == 3 ? #121214
+        : surface-is-custom ? surface-custom.darker(0.45)
+        : Dark.page;
     out property <color> page-fg-muted: dark ? Dark.page-fg-muted : Light.page-fg-muted;
 
     // ── content ──────────────────────────────────────────────────────────

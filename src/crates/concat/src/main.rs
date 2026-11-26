@@ -24,7 +24,7 @@ fn main() -> Result<(), slint::PlatformError> {
     // with no standard output - is not a reason to panic.
     if launch == Ok(Launch::Version) {
         use std::io::Write;
-        let _ = writeln!(std::io::stdout(), "concat {}", env!("CARGO_PKG_VERSION"));
+        let _ = writeln!(std::io::stdout(), "clipcut {}", env!("CARGO_PKG_VERSION"));
         return Ok(());
     }
     // The API's contract, for a client generator or the docs: no log, no
@@ -77,7 +77,7 @@ fn main() -> Result<(), slint::PlatformError> {
             .unwrap_or_default();
         let _ = concat_host::logs::open_console(None);
         return concat_mcp::run(mode).map_err(|error| {
-            log::error!("api: the MCP server for an agent stopped: {error}; Concat exits");
+            log::error!("api: the MCP server for an agent stopped: {error}; ClipCut exits");
             slint::PlatformError::Other(error)
         });
     }

@@ -79,7 +79,7 @@ mod voice;
 use slint::{Model, ModelRc, SharedString, VecModel};
 
 use crate::dock::{
-    Dock, DockLayout, SEAT_GAP, default_dock, lay_out, nearest_row, row_at, row_top,
+    Dock, DockLayout, default_dock, lay_out, nearest_row, row_at, row_top, seat_gap,
 };
 use crate::format::{
     WAVE_BAR, WAVE_PITCH, colour_of, frames_timecode, hex_of, hex_rgba, hex_with_alpha,
@@ -2839,6 +2839,8 @@ fn few(names: &[String]) -> String {
 pub enum Confirm {
     /// Deleting a whole track, and every clip on it.
     RemoveTrack { track_id: String },
+    /// Deleting a timeline sequence that contains clips.
+    RemoveTimeline { timeline_id: String },
     /// Exporting over a file that is already at `path`.
     ReplaceExport { path: String },
     /// Quitting though the project could not be saved, for `error`. A
@@ -3736,8 +3738,8 @@ mod tests {
     #[test]
     fn home_folder_is_under_home_with_native_separators() {
         let home = std::env::home_dir().expect("a home directory");
-        let folder = std::path::PathBuf::from(home_folder("Desktop/Concat"));
-        assert_eq!(folder, home.join("Desktop").join("Concat"));
+        let folder = std::path::PathBuf::from(home_folder("Desktop/ClipCut"));
+        assert_eq!(folder, home.join("Desktop").join("ClipCut"));
         #[cfg(windows)]
         assert!(!folder.to_string_lossy().contains('/'));
     }

@@ -95,9 +95,9 @@ pub fn shown<'a>(
 }
 
 /// The official site, which the guides and the developer docs are pages of.
-const SITE: &str = "https://concat.standalones.org";
+const SITE: &str = "https://github.com/omergo445-lgtm/clipcut";
 /// The repository: the code, the issues, the releases.
-pub const REPOSITORY: &str = "https://github.com/jub0t/Concat";
+pub const REPOSITORY: &str = "https://github.com/omergo445-lgtm/clipcut";
 
 /// Where each of the launch screen's links goes, by the name the screen
 /// sends. One table, so a moved page is one line here. Every address is a
@@ -211,11 +211,11 @@ fn default_location() -> String {
 /// new project failed with EPERM. https://github.com/jub0t/Concat/issues/299
 fn location_on(os: &str, desktop: Option<PathBuf>, home: impl Fn(&str) -> String) -> String {
     match os {
-        "android" => home("Concat"),
-        "ios" => home("Documents/Concat"),
+        "android" => home("ClipCut"),
+        "ios" => home("Documents/ClipCut"),
         _ => desktop
-            .map(|desktop| desktop.join("Concat").to_string_lossy().into_owned())
-            .unwrap_or_else(|| home("Desktop/Concat")),
+            .map(|desktop| desktop.join("ClipCut").to_string_lossy().into_owned())
+            .unwrap_or_else(|| home("Desktop/ClipCut")),
     }
 }
 
@@ -628,15 +628,15 @@ mod tests {
         let desktop = || Some(PathBuf::from("/desk"));
         assert_eq!(
             location_on("ios", desktop(), home),
-            "/home/Documents/Concat"
+            "/home/Documents/ClipCut"
         );
-        assert_eq!(location_on("ios", None, home), "/home/Documents/Concat");
-        assert_eq!(location_on("android", None, home), "/home/Concat");
+        assert_eq!(location_on("ios", None, home), "/home/Documents/ClipCut");
+        assert_eq!(location_on("android", None, home), "/home/ClipCut");
         assert_eq!(
             PathBuf::from(location_on("macos", desktop(), home)),
-            Path::new("/desk").join("Concat")
+            Path::new("/desk").join("ClipCut")
         );
-        assert_eq!(location_on("linux", None, home), "/home/Desktop/Concat");
+        assert_eq!(location_on("linux", None, home), "/home/Desktop/ClipCut");
     }
 
     /// The next untitled name skips every folder already there, and starts

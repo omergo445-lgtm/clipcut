@@ -4,6 +4,8 @@
 //! The workspace's arrangement: a tree of splits and views, walked flat
 //! for Slint, which has no recursion.
 
+use std::sync::atomic::{AtomicI32, Ordering};
+
 use crate::ui::{DockDivider, DockSide, PaneKind, SeatBox};
 
 pub const SEAT_MIN_W: f32 = 240.0;
@@ -12,8 +14,23 @@ pub const SEAT_MIN_H: f32 = 140.0;
 /// find its corner button with, which is the only way back from a layout that
 /// has been squeezed too far.
 pub const SEAT_MIN_GRAB: f32 = 64.0;
-/// The gutter between the halves of a split, and the margin round the lot.
-pub const SEAT_GAP: f32 = 8.0;
+/// Default gutter style index (`2 = 8px`).
+static GUTTER_STYLE: AtomicI32 = AtomicI32::new(2);
+
+/// Returns the active gutter spacing in logical pixels:
+/// `0 = 2px` (Seamless), `1 = 5px` (Tight), `2 = 8px` (Default), `3 = 14px` (Airy).
+pub fn seat_gap() -> f32 {
+    match GUTTER_STYLE.load(Ordering::Relaxed) {
+        0 => 2.0,
+        1 => 5.0,
+        3 => 14.0,
+        _ => 8.0,
+    }
+}
+
+pub fn set_gutter_style(style: i32) {
+    GUTTER_STYLE.store(style.clamp(0, 3), Ordering::Relaxed);
+}
 
 pub enum Dock {
     /// One view, filling its box.
@@ -197,6 +214,7 @@ pub struct DockLayout {
 }
 
 pub fn lay_out(node: &Dock, (x, y, w, h): (f32, f32, f32, f32), out: &mut DockLayout) {
+    let gap = seat_gap();
     match node {
         Dock::Leaf(kind) => out.seats.push(SeatBox {
             index: out.seats.len() as i32,
@@ -220,7 +238,7 @@ pub fn lay_out(node: &Dock, (x, y, w, h): (f32, f32, f32, f32), out: &mut DockLa
             out.extents.push(0.0);
 
             let along = if *columns { w } else { h };
-            let usable = (along - SEAT_GAP).max(0.0);
+            let usable = (along - gap).max(0.0);
             let head = (usable * ratio).clamp(0.0, usable);
             out.extents[index] = usable;
             out.dividers[index] = if *columns {
@@ -229,7 +247,7 @@ pub fn lay_out(node: &Dock, (x, y, w, h): (f32, f32, f32, f32), out: &mut DockLa
                     columns: true,
                     x: x + head,
                     y,
-                    width: SEAT_GAP,
+                    width: gap,
                     height: h.max(0.0),
                 }
             } else {
@@ -239,29 +257,21 @@ pub fn lay_out(node: &Dock, (x, y, w, h): (f32, f32, f32, f32), out: &mut DockLa
                     x,
                     y: y + head,
                     width: w.max(0.0),
-                    height: SEAT_GAP,
+                    height: gap,
                 }
             };
 
             if *columns {
                 lay_out(first, (x, y, head, h), out);
-                lay_out(second, (x + head + SEAT_GAP, y, usable - head, h), out);
+                lay_out(second, (x + head + gap, y, usable - head, h), out);
             } else {
                 lay_out(first, (x, y, w, head), out);
-                lay_out(second, (x, y + head + SEAT_GAP, w, usable - head), out);
+                lay_out(second, (x, y + head + gap, w, usable - head), out);
             }
         }
     }
 }
 
-/// The arrangement the editor opens with: the inspector a column down the
-/// whole right side, and in the rest the library and the monitor across the
-/// top and the timeline under both of them. The inspector is the tallest
-/// thing in the window - a stack of sections that would otherwise scroll -
-/// and the timeline gives up its right end to it, which is the end with
-/// nothing on it yet. About 0.22 of the width to the inspector and 0.25 to
-/// the library, which is 0.32 of what is left once the inspector has had
-/// its share; the timeline takes the lower 0.4 of the height.
 pub fn default_dock() -> Dock {
     Dock::Split {
         columns: true,
@@ -275,11 +285,63 @@ pub fn default_dock() -> Dock {
                 first: Dock::leaf(PaneKind::Media),
                 second: Dock::leaf(PaneKind::Preview),
             }),
-            // The timeline, whose VU meters are a column at its own right
-            // edge (see vu-meter.slint) rather than a seat of their own.
             second: Dock::leaf(PaneKind::Timeline),
         }),
         second: Dock::leaf(PaneKind::Inspector),
+    }
+}
+
+/// Built-in workspace layout presets:
+/// - `0`: Studio Default (Library + Preview top-left, Timeline bottom-left, tall Inspector right)
+/// - `1`: Wide Timeline (Library + Preview + Inspector across top, full-width Timeline across bottom)
+/// - `2`: Keyframes Suite (Library + Preview + Inspector top, Timeline + Keyframes split bottom)
+/// - `3`: Focus Cut (distraction-free Preview over Timeline)
+pub fn preset_dock(preset: i32) -> Dock {
+    match preset {
+        1 => Dock::Split {
+            columns: false,
+            ratio: 0.58,
+            first: Box::new(Dock::Split {
+                columns: true,
+                ratio: 0.75,
+                first: Box::new(Dock::Split {
+                    columns: true,
+                    ratio: 0.34,
+                    first: Dock::leaf(PaneKind::Media),
+                    second: Dock::leaf(PaneKind::Preview),
+                }),
+                second: Dock::leaf(PaneKind::Inspector),
+            }),
+            second: Dock::leaf(PaneKind::Timeline),
+        },
+        2 => Dock::Split {
+            columns: false,
+            ratio: 0.55,
+            first: Box::new(Dock::Split {
+                columns: true,
+                ratio: 0.75,
+                first: Box::new(Dock::Split {
+                    columns: true,
+                    ratio: 0.34,
+                    first: Dock::leaf(PaneKind::Media),
+                    second: Dock::leaf(PaneKind::Preview),
+                }),
+                second: Dock::leaf(PaneKind::Inspector),
+            }),
+            second: Box::new(Dock::Split {
+                columns: true,
+                ratio: 0.62,
+                first: Dock::leaf(PaneKind::Timeline),
+                second: Dock::leaf(PaneKind::Keyframes),
+            }),
+        },
+        3 => Dock::Split {
+            columns: false,
+            ratio: 0.62,
+            first: Dock::leaf(PaneKind::Preview),
+            second: Dock::leaf(PaneKind::Timeline),
+        },
+        _ => default_dock(),
     }
 }
 

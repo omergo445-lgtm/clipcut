@@ -169,7 +169,7 @@ impl SoundsPane {
                 Ok(None) => self.concat = ConcatState::Soon,
                 Err(error) => {
                     log::warn!(
-                        "network: wanted Concat's sound list and could not fetch it: {error}; the Audio page shows what it had, or says it is offline"
+                        "network: wanted Studio sound list and could not fetch it: {error}; the Audio page shows what it had, or says it is offline"
                     );
                     // A list already on screen stays: the refresh failed,
                     // not the shelf.

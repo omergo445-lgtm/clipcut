@@ -158,6 +158,7 @@ export component TitleBar inherits Rectangle {
     callback open-settings();
     /// A view was picked from the add-panel list.
     callback add-pane(kind: PaneKind);
+    callback dock-preset(preset: int);
     callback export-clicked();
 
     height: 32px;
@@ -214,7 +215,7 @@ export component TitleBar inherits Rectangle {
         VerticalLayout {
             alignment: center;
             Image {
-                source: @image-url("assets/concat-logo.png");
+                source: @image-url("assets/clipcut-logo.png");
                 width: 18px;
                 height: 18px;
                 image-fit: contain;
@@ -274,15 +275,11 @@ export component TitleBar inherits Rectangle {
 
         Rectangle { horizontal-stretch: 1; }
 
-        // Beside Settings, because it is the same sort of thing: neither one
-        // is about the project, both are about the window you are looking at
-        // it through. A seat's own corner button changes or closes that seat;
-        // this is the only place a seat can be brought into existence, which
-        // is why it lives on the window and not in a pane.
         if !root.minimal && !root.covered: VerticalLayout {
             alignment: center;
             AddPaneButton {
                 added(kind) => { root.add-pane(kind); }
+                preset-chosen(preset) => { root.dock-preset(preset); }
             }
         }
 

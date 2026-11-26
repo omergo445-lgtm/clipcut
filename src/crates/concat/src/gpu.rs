@@ -120,7 +120,7 @@ impl Gpu {
         // timeline's frame, and Slint's renderer allocates a layer as large
         // as the element it is flattening.
         let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
-            label: Some("concat"),
+            label: Some("clipcut"),
             required_limits: adapter.limits(),
             ..Default::default()
         }))

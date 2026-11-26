@@ -36,10 +36,14 @@ const CLIP: f32 = 0.999;
 pub fn microphones() -> Vec<String> {
     use cpal::traits::{DeviceTrait, HostTrait};
 
+    let sound_server = crate::playback::ensure_linux_sound_server_alsa();
     let host = cpal::default_host();
     let default = host
         .default_input_device()
         .and_then(|device| device.name().ok());
+    if sound_server {
+        return default.into_iter().collect();
+    }
     let mut names: Vec<String> = host
         .input_devices()
         .map(|devices| devices.filter_map(|device| device.name().ok()).collect())
@@ -299,12 +303,17 @@ fn run(
     use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 
     let opened = (|| -> Result<_, String> {
+        let sound_server = crate::playback::ensure_linux_sound_server_alsa();
         let host = cpal::default_host();
-        let named = name.and_then(|name| {
-            host.input_devices()
-                .ok()?
-                .find(|device| device.name().is_ok_and(|found| found == name))
-        });
+        let named = if sound_server {
+            None
+        } else {
+            name.and_then(|name| {
+                host.input_devices()
+                    .ok()?
+                    .find(|device| device.name().is_ok_and(|found| found == name))
+            })
+        };
         let device = match named {
             Some(device) => device,
             None => host
@@ -321,7 +330,7 @@ fn run(
             cpal::SampleFormat::U16 => input::<u16>(&device, &config, events, shared),
             cpal::SampleFormat::I32 => input::<i32>(&device, &config, events, shared),
             other => Err(format!(
-                "the microphone records {other:?} samples, which Concat does not read"
+                "the microphone records {other:?} samples, which ClipCut does not read"
             )),
         }?;
         stream
@@ -678,7 +687,7 @@ pub fn repair(path: &Path) -> Result<bool, String> {
         || &head[36..40] != b"data"
     {
         return Err(format!(
-            "{} is not a recording Concat wrote",
+            "{} is not a recording ClipCut wrote",
             path.display()
         ));
     }

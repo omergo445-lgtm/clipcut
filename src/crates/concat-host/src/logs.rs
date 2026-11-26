@@ -68,7 +68,9 @@ fn install(
     folder: Option<PathBuf>,
     extra: Option<Box<dyn log::Log>>,
 ) -> Result<concat_log::Opened, String> {
-    let spec = std::env::var(LEVEL_VARIABLE).unwrap_or_default();
+    let spec = std::env::var("CLIPCUT_LOG")
+        .or_else(|_| std::env::var(LEVEL_VARIABLE))
+        .unwrap_or_default();
     let (filter, skipped) = concat_log::Filter::parse(&spec);
     let opened = concat_log::open(concat_log::Config {
         folder,
@@ -96,12 +98,12 @@ fn install(
     }
     match &opened.file {
         Some(path) => log::info!(
-            "log: {} · Concat at {}",
+            "log: {} · ClipCut at {}",
             path.display(),
             level_name(concat_log::level())
         ),
         None => log::info!(
-            "log: no file this run · Concat at {}",
+            "log: no file this run · ClipCut at {}",
             level_name(concat_log::level())
         ),
     }

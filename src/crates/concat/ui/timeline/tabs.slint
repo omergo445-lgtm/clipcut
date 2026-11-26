@@ -1,57 +1,96 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // SPDX-FileCopyrightText: 2026 Jareer Abdullah and Concat contributors
 
+import { I18n } from "../i18n.slint";
 import { Theme } from "../theme/theme.slint";
 import { Focus, Payload } from "../util.slint";
 import { Glyph, Icon } from "../icons.slint";
 import { TimelineTabData } from "model.slint";
 
-// The timeline tabs, one per timeline in the project — sequences, in the
-// vocabulary every other editor uses. Kept above the tool tray so switching
-// reads as changing documents rather than changing tools.
-//
-// Click switches, double-click renames in place committing on blur, and the
-// close button asks: deleting a timeline throws away every clip on it, so
-// this strip never deletes directly. The shape: a squared-off tab whose active
-// state is the raised ground alone - it once wore an accent bar on its top
-// edge as well, which was one more lime line in a window that had enough.
-//
-// Tabs drag to reorder. A lifted tab carries its index the way a bin card
-// carries its row, and the tab it is let go over says which side of itself
-// it landed on; the move itself is the engine's, so undo takes it back like
-// any other edit.
+component TabMenuRow inherits Rectangle {
+    in property <Glyph> glyph;
+    in property <string> label;
+    in property <bool> danger: false;
+    in property <bool> enabled: true;
+
+    callback chosen();
+
+    height: 26px;
+
+    row := Rectangle {
+        x: 4px;
+        y: 0;
+        width: parent.width - 8px;
+        height: parent.height;
+        border-radius: Theme.r-sm;
+        background: !root.enabled ? Colors.transparent
+            : touch.has-hover ? (root.danger ? Theme.danger-soft : Theme.field-hover)
+            : Colors.transparent;
+
+        property <brush> ink: !root.enabled ? Theme.fg-dim
+            : (root.danger && touch.has-hover) ? Theme.danger
+            : touch.has-hover ? Theme.fg
+            : Theme.fg-muted;
+
+        HorizontalLayout {
+            padding-left: 8px;
+            padding-right: 8px;
+            spacing: 8px;
+
+            VerticalLayout {
+                alignment: center;
+                Icon {
+                    glyph: root.glyph;
+                    size: 13px;
+                    tint: row.ink;
+                }
+            }
+
+            Text {
+                horizontal-stretch: 1;
+                text: root.label;
+                color: row.ink;
+                font-size: Theme.fs;
+                vertical-alignment: center;
+                overflow: elide;
+            }
+        }
+
+        touch := TouchArea {
+            enabled: root.enabled;
+            mouse-cursor: pointer;
+            clicked => { root.chosen(); }
+        }
+    }
+}
 
 component Tab inherits Rectangle {
     in property <string> name;
     in property <bool> current;
     /// last tab standing: nothing to close down to
     in property <bool> closable;
+    in property <bool> pane-removable;
 
     callback selected();
     callback renamed(name: string);
     callback close-requested();
+    callback pane-removed();
 
     property <bool> renaming;
-    /// The label's natural width, capped. Read from `preferred-width` and not
-    /// from the label's actual width: the label is sized *from* this, and
-    /// asking it how wide it ended up is a loop.
     property <length> text-w: Math.min(130px, label.preferred-width);
-    /// room for the padding, plus the close button when there is one
     property <length> furniture: root.closable ? 38px : 22px;
+    property <length> menu-w: 172px;
+    property <length> menu-h: root.pane-removable ? (3 * 26px + 9px + 8px) : (2 * 26px + 8px);
 
     width: renaming ? 112px : root.text-w + root.furniture;
     height: 30px;
     border-radius: Theme.r-sm;
-    // Bottom corners squared: the tab meets the strip's edge, it does not
-    // float above it. Slint has no per-corner radius, so the two lower corners
-    // are filled back in by the band below.
     background: root.current ? Theme.raised
         : touch.has-hover ? Theme.field
         : Colors.transparent;
 
     animate background { duration: 100ms; easing: cubic-bezier(0.4, 0, 0.2, 1); }
 
-    // squares off the bottom corners the radius above rounded
     Rectangle {
         x: 0;
         y: parent.height - Theme.r-sm;
@@ -60,9 +99,6 @@ component Tab inherits Rectangle {
         background: parent.background;
     }
 
-    // Everything sits inside the hover target, so the close button revealed on
-    // hover cannot blink itself out of existence by taking the hover away from
-    // the tab underneath it. Same rule as MediaCard.
     touch := TouchArea {
         mouse-cursor: pointer;
         clicked => {
@@ -70,6 +106,11 @@ component Tab inherits Rectangle {
         }
         double-clicked => {
             root.renaming = true;
+        }
+        pointer-event(event) => {
+            if (event.kind == PointerEventKind.down && event.button == PointerEventButton.right) {
+                tab-menu.show();
+            }
         }
 
         label := Text {
@@ -84,8 +125,6 @@ component Tab inherits Rectangle {
             visible: !root.renaming;
         }
 
-        // Revealed on hover: a row of permanent x's over a strip of tabs is a
-        // row of invitations to lose an edit.
         if root.closable && touch.has-hover && !root.renaming: Rectangle {
             x: parent.width - self.width - 5px;
             y: (parent.height - self.height) / 2;
@@ -105,11 +144,69 @@ component Tab inherits Rectangle {
             shut := TouchArea {
                 mouse-cursor: pointer;
                 clicked => {
-                    // Must not also switch tabs: closing an inactive timeline
-                    // should not first drag the editor onto it. A TouchArea
-                    // declared inside another one takes the click outright, so
-                    // this stops here without needing to say so.
                     root.close-requested();
+                }
+            }
+        }
+    }
+
+    tab-menu := PopupWindow {
+        x: 0px;
+        y: root.height + 4px;
+        width: root.menu-w;
+        height: root.menu-h;
+        close-policy: close-on-click-outside;
+
+        Rectangle {
+            background: Theme.field;
+            border-width: 1px;
+            border-color: Theme.line-strong;
+            border-radius: Theme.r;
+            clip: true;
+
+            VerticalLayout {
+                padding: 4px;
+                alignment: start;
+
+                TabMenuRow {
+                    glyph: Glyph.tag;
+                    label: I18n.t("timeline.renameTimeline");
+                    chosen => {
+                        tab-menu.close();
+                        root.renaming = true;
+                    }
+                }
+
+                TabMenuRow {
+                    glyph: Glyph.trash;
+                    label: I18n.t("timeline.deleteTimeline");
+                    danger: true;
+                    enabled: root.closable;
+                    chosen => {
+                        tab-menu.close();
+                        root.close-requested();
+                    }
+                }
+
+                if root.pane-removable: Rectangle {
+                    height: 9px;
+                    Rectangle {
+                        x: 6px;
+                        y: (parent.height - 1px) / 2;
+                        width: parent.width - 12px;
+                        height: 1px;
+                        background: Theme.line;
+                    }
+                }
+
+                if root.pane-removable: TabMenuRow {
+                    glyph: Glyph.close;
+                    label: I18n.t("paneSwitcher.removePanel");
+                    danger: true;
+                    chosen => {
+                        tab-menu.close();
+                        root.pane-removed();
+                    }
                 }
             }
         }
@@ -130,10 +227,6 @@ component Tab inherits Rectangle {
             x: 5px;
             y: (parent.height - self.height) / 2;
             width: parent.width - 10px;
-            // A TextInput fills its Rectangle parent by default, so without
-            // this the centring above subtracts the parent's own height from
-            // itself and resolves to zero, leaving the text against the top
-            // edge. Same fix, and the same reason, as Field in modal.slint.
             height: self.preferred-height;
             text: root.name;
             color: Theme.fg;
@@ -147,8 +240,6 @@ component Tab inherits Rectangle {
                 self.select-all();
             }
 
-            // Commit on blur, so clicking away saves rather than discards —
-            // the rule every rename-in-place in this app follows.
             changed has-focus => {
                 if (!self.has-focus && root.renaming) {
                     root.renamed(self.text);
@@ -175,15 +266,15 @@ component Tab inherits Rectangle {
 export component TimelineTabs inherits Rectangle {
     in property <[TimelineTabData]> tabs;
     in property <int> current;
+    in property <bool> pane-removable: false;
 
     callback selected(index: int);
     callback renamed(index: int, name: string);
     callback close-requested(index: int);
     callback added();
-    /// Tab `from` was dropped at `to`, a slot counted over the strip as it
-    /// stands - so `to` may be one past the end, and may sit either side
-    /// of `from` itself. Rust discounts the moving tab.
     callback moved(from: int, to: int);
+    callback pane-removed();
+    callback pane-context-clicked();
 
     height: 32px;
     background: Theme.well;
@@ -261,6 +352,11 @@ export component TimelineTabs inherits Rectangle {
                 root.offset = root.at + (event.delta-x != 0px ? event.delta-x : event.delta-y);
                 return EventResult.accept;
             }
+            pointer-event(event) => {
+                if (event.kind == PointerEventKind.down && event.button == PointerEventButton.right) {
+                    root.pane-context-clicked();
+                }
+            }
 
             strip := HorizontalLayout {
                 x: root.at;
@@ -311,12 +407,14 @@ export component TimelineTabs inherits Rectangle {
                                 name: tab.name;
                                 current: index == root.current;
                                 closable: root.tabs.length > 1;
+                                pane-removable: root.pane-removable;
                                 // Faded while in the air, as a bin card is.
                                 opacity: drag.dragging ? 0.45 : 1.0;
 
                                 selected => { root.selected(index); }
                                 renamed(name) => { root.renamed(index, name); }
                                 close-requested => { root.close-requested(index); }
+                                pane-removed => { root.pane-removed(); }
                             }
                         }
 

@@ -330,6 +330,11 @@ export component PaneSwitcher inherits Rectangle {
             touch := TouchArea {
                 mouse-cursor: pointer;
                 clicked => { menu.show(); }
+                pointer-event(event) => {
+                    if (event.kind == PointerEventKind.down && event.button == PointerEventButton.right) {
+                        menu.show();
+                    }
+                }
             }
 
             Tip {
@@ -337,6 +342,10 @@ export component PaneSwitcher inherits Rectangle {
                 active: touch.has-hover;
             }
         }
+    }
+
+    public function open-menu() {
+        menu.show();
     }
 
     // Hung under the button and aligned to its trailing edge, which is also
@@ -351,29 +360,17 @@ export component PaneSwitcher inherits Rectangle {
         close-policy: close-on-click-outside;
 
         Rectangle {
-            // The tone the library's page strip gives its selected tab, which
-            // is also what the button that opened this wears. A picker and the
-            // list it opens are one control in two states, and one tone for
-            // both is what says so; `raised` put the list a step off the thing
-            // it belongs to.
             background: Theme.field;
             border-width: 1px;
             border-color: Theme.line-strong;
             border-radius: Theme.r;
             clip: true;
 
-            // The pane body's own wheel-scrolled box, so a list the window
-            // has no room for is reached the way a long inspector is. With
-            // room, the bar stays out of sight and nothing moves.
             PaneScroll {
                 VerticalLayout {
                     padding: 4px;
                     alignment: start;
 
-                    // Written out rather than looped: five is the whole list,
-                    // and a `for` over it would need the array to exist
-                    // somewhere the rows could reach, which is more machinery
-                    // than the rows.
                     SwitchRow {
                         kind: PaneKind.media;
                         current: root.kind == PaneKind.media;
@@ -412,20 +409,59 @@ export component PaneSwitcher inherits Rectangle {
     }
 }
 
-// "Add a panel", for the window's own top-right corner.
-//
-// The same list as a seat's own dropdown, minus the tick and the remove row:
-// there is nothing here yet to be current and nothing yet to close. What it
-// adds goes wherever there is most room — see `dock-add` in main.rs, which
-// halves the largest seat along its longer side, the way a tiling window
-// manager places a new window.
+component PresetRow inherits Rectangle {
+    in property <string> label;
+
+    callback chosen();
+
+    height: 26px;
+
+    Rectangle {
+        x: 4px;
+        y: 0;
+        width: parent.width - 8px;
+        height: parent.height;
+        border-radius: Theme.r-sm;
+        background: touch.has-hover ? Theme.field-hover : Colors.transparent;
+
+        HorizontalLayout {
+            padding-left: 8px;
+            padding-right: 8px;
+            spacing: 8px;
+
+            VerticalLayout {
+                alignment: center;
+                Icon {
+                    glyph: Glyph.slot;
+                    size: 13px;
+                    tint: touch.has-hover ? Theme.accent : Theme.fg-muted;
+                }
+            }
+
+            Text {
+                horizontal-stretch: 1;
+                text: root.label;
+                color: touch.has-hover ? Theme.fg : Theme.fg-muted;
+                font-size: Theme.fs;
+                vertical-alignment: center;
+                overflow: elide;
+            }
+        }
+
+        touch := TouchArea {
+            mouse-cursor: pointer;
+            clicked => { root.chosen(); }
+        }
+    }
+}
+
+// "Add a panel" + 1-click Workspace Layout Presets, for the window's top-right corner.
 export component AddPaneButton inherits Rectangle {
     callback added(kind: PaneKind);
+    callback preset-chosen(preset: int);
 
-    property <length> menu-w: 168px;
-    /// Five view rows and the surface's padding; held to the room under the
-    /// button the way the seat's own menu is.
-    property <length> list-h: 5 * 26px + 8px;
+    property <length> menu-w: 184px;
+    property <length> list-h: 5 * 26px + 9px + 4 * 26px + 8px;
     property <length> menu-h: Math.min(root.list-h, Math.max(3 * 26px + 8px,
         Panes.room-below(root.absolute-position.y + root.height + 4px)));
 
@@ -454,9 +490,6 @@ export component AddPaneButton inherits Rectangle {
         active: touch.has-hover;
     }
 
-    // Under the button and pulled back inside the window: this one sits within
-    // a few pixels of the right edge of the strip, so a menu hung from its
-    // leading edge would fall off the screen.
     menu := PopupWindow {
         x: root.width - root.menu-w;
         y: root.height + 4px;
@@ -465,11 +498,6 @@ export component AddPaneButton inherits Rectangle {
         close-policy: close-on-click-outside;
 
         Rectangle {
-            // The tone the library's page strip gives its selected tab, which
-            // is also what the button that opened this wears. A picker and the
-            // list it opens are one control in two states, and one tone for
-            // both is what says so; `raised` put the list a step off the thing
-            // it belongs to.
             background: Theme.field;
             border-width: 1px;
             border-color: Theme.line-strong;
@@ -501,25 +529,50 @@ export component AddPaneButton inherits Rectangle {
                         kind: PaneKind.timeline;
                         chosen => { menu.close(); root.added(PaneKind.timeline); }
                     }
+
+                    SwitchDivider { }
+
+                    PresetRow {
+                        label: I18n.t("settings.layoutStudio");
+                        chosen => { menu.close(); root.preset-chosen(0); }
+                    }
+                    PresetRow {
+                        label: I18n.t("settings.layoutWide");
+                        chosen => { menu.close(); root.preset-chosen(1); }
+                    }
+                    PresetRow {
+                        label: I18n.t("settings.layoutKeyframes");
+                        chosen => { menu.close(); root.preset-chosen(2); }
+                    }
+                    PresetRow {
+                        label: I18n.t("settings.layoutFocus");
+                        chosen => { menu.close(); root.preset-chosen(3); }
+                    }
                 }
             }
         }
     }
 }
 
-/// A panel's header strip as a handle: pressing anywhere on it that no
-/// button, tab or chip has claimed and dragging moves the panel, as the
-/// corner switcher's own drag does - most editors move a panel by its
-/// header, and a 24px corner button is a small thing to have to find.
-/// Laid *under* the panel by `Seat`, so every control in the header keeps
-/// its press; only the strip's empty space and its title reach this. The
-/// payload is the switcher's, so a drop cannot tell the two apart.
+/// A panel's header strip as a handle and right-click target: dragging moves
+/// the panel, and right-clicking anywhere on the header opens the panel menu
+/// with Switch / Remove panel.
 export component PaneGrip inherits Rectangle {
     in property <PaneKind> kind;
     in property <int> seat;
+    in property <bool> removable: true;
+
+    callback picked(kind: PaneKind);
+    callback removed();
 
     property <string> payload:
         "pane:\{root.seat}:\{Panes.label(root.kind)}:\{Panes.id(root.kind)}";
+    property <length> menu-w: 168px;
+    property <length> list-h: 5 * 26px + 9px + 26px + 8px;
+    property <length> popup-x: 8px;
+    property <length> popup-y: 28px;
+    property <length> menu-h: Math.min(root.list-h, Math.max(3 * 26px + 8px,
+        Panes.room-below(root.absolute-position.y + root.popup-y)));
 
     DragArea {
         width: parent.width;
@@ -529,5 +582,71 @@ export component PaneGrip inherits Rectangle {
         drag-image: Payload.preview(root.payload);
         drag-image-offset-x: -8;
         drag-image-offset-y: -4;
+
+        TouchArea {
+            pointer-event(event) => {
+                if (event.kind == PointerEventKind.down && event.button == PointerEventButton.right) {
+                    root.popup-x = Math.max(4px, Math.min(root.width - root.menu-w - 4px, self.mouse-x));
+                    root.popup-y = self.mouse-y + 4px;
+                    ctx-menu.show();
+                }
+            }
+        }
+    }
+
+    ctx-menu := PopupWindow {
+        x: root.popup-x;
+        y: root.popup-y;
+        width: root.menu-w;
+        height: root.menu-h;
+        close-policy: close-on-click-outside;
+
+        Rectangle {
+            background: Theme.field;
+            border-width: 1px;
+            border-color: Theme.line-strong;
+            border-radius: Theme.r;
+            clip: true;
+
+            PaneScroll {
+                VerticalLayout {
+                    padding: 4px;
+                    alignment: start;
+
+                    SwitchRow {
+                        kind: PaneKind.media;
+                        current: root.kind == PaneKind.media;
+                        chosen => { ctx-menu.close(); root.picked(PaneKind.media); }
+                    }
+                    SwitchRow {
+                        kind: PaneKind.preview;
+                        current: root.kind == PaneKind.preview;
+                        chosen => { ctx-menu.close(); root.picked(PaneKind.preview); }
+                    }
+                    SwitchRow {
+                        kind: PaneKind.inspector;
+                        current: root.kind == PaneKind.inspector;
+                        chosen => { ctx-menu.close(); root.picked(PaneKind.inspector); }
+                    }
+                    SwitchRow {
+                        kind: PaneKind.keyframes;
+                        current: root.kind == PaneKind.keyframes;
+                        chosen => { ctx-menu.close(); root.picked(PaneKind.keyframes); }
+                    }
+                    SwitchRow {
+                        kind: PaneKind.timeline;
+                        current: root.kind == PaneKind.timeline;
+                        chosen => { ctx-menu.close(); root.picked(PaneKind.timeline); }
+                    }
+
+                    SwitchDivider { }
+
+                    RemoveRow {
+                        enabled: root.removable;
+                        chosen => { ctx-menu.close(); root.removed(); }
+                    }
+                }
+            }
+        }
     }
 }

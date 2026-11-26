@@ -174,6 +174,7 @@ fn migrate(document: &Value) -> Option<Map<String, Value>> {
 /// project's `extra` map and be written twice; they are the writer's to
 /// produce afresh.
 const WRITER_OWNED: &[&str] = &[
+    "clipcut",
     "concat",
     "version",
     "name",
@@ -325,7 +326,7 @@ pub fn to_document(settings: &DocumentSettings, project: &Project) -> Value {
         .map(|timeline| (timeline["tracks"].clone(), timeline["clips"].clone()))
         .unwrap_or_else(|| (json!([]), json!([])));
     let mut document = Map::new();
-    document.insert("concat".into(), json!("0.1.0"));
+    document.insert("clipcut".into(), json!("0.1.0"));
     document.insert("version".into(), json!(DOCUMENT_VERSION));
     document.insert("name".into(), json!(settings.name));
     // The active timeline's frame, at the top level where every build has

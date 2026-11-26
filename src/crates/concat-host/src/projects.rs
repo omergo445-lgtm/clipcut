@@ -19,12 +19,12 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 
-const MANIFEST: &str = "concat.json";
+const MANIFEST: &str = "clipcut.json";
 /// The manifest's earlier names, newest first. Projects created before a
 /// rename keep theirs forever: the manifest is read and written under the
 /// name it has, and only brand-new projects get the current one. A rename
 /// must never orphan an edit.
-const LEGACY_MANIFESTS: &[&str] = &["wolfcut.json"];
+const LEGACY_MANIFESTS: &[&str] = &["concat.json", "wolfcut.json"];
 
 /// The manifest file this project actually uses: the current name, a legacy
 /// name if that is what exists, the current name for a fresh folder.
@@ -87,7 +87,7 @@ pub struct ProjectInfo {
 struct Manifest {
     /// The version of the app that wrote the file, under whichever name the
     /// app had at the time. Informational: nothing reads it back.
-    #[serde(alias = "wolfcut")]
+    #[serde(rename = "clipcut", alias = "concat", alias = "wolfcut")]
     concat: String,
     name: String,
     video: Video,
@@ -150,7 +150,7 @@ pub fn create(
     // just as safe from being clobbered as a new one.
     if is_project(&root) {
         return Err(format!(
-            "a Concat project already exists at {}",
+            "a ClipCut project already exists at {}",
             root.display()
         ));
     }
@@ -471,7 +471,7 @@ pub fn read_document_as_stored(path: &str) -> Result<Option<(serde_json::Value, 
     };
     serde_json::from_slice(&bytes)
         .map(|document| Some((document, bytes)))
-        .map_err(|error| format!("{} is not a Concat project: {error}", manifest.display()))
+        .map_err(|error| format!("{} is not a ClipCut project: {error}", manifest.display()))
 }
 
 /// Where the copy of the document as it was last opened lives: beside the
@@ -507,7 +507,7 @@ pub fn open(path: &str) -> Result<ProjectInfo, String> {
     let bytes = std::fs::read(&manifest)
         .map_err(|error| format!("could not read {}: {error}", manifest.display()))?;
     let document: Manifest = serde_json::from_slice(&bytes)
-        .map_err(|error| format!("{} is not a Concat project: {error}", manifest.display()))?;
+        .map_err(|error| format!("{} is not a ClipCut project: {error}", manifest.display()))?;
 
     if document.video.rate_den == 0 {
         return Err(format!("{} has an invalid frame rate", manifest.display()));

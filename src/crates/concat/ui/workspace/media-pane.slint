@@ -75,6 +75,7 @@ component LibraryTab inherits Rectangle {
     in property <bool> current;
 
     callback clicked();
+    callback context-clicked();
 
     // flex-auto, not flex-1: the label is the basis and only the surplus is
     // shared, so "Transitions" is never crammed to make room for padding
@@ -142,6 +143,11 @@ component LibraryTab inherits Rectangle {
             mouse-cursor: pointer;
             clicked => {
                 root.clicked();
+            }
+            pointer-event(event) => {
+                if (event.kind == PointerEventKind.down && event.button == PointerEventButton.right) {
+                    root.context-clicked();
+                }
             }
         }
     }
@@ -2018,64 +2024,67 @@ export component MediaPane inherits Rectangle {
                             label: I18n.t("common.media");
                             current: root.tab == 0;
                             clicked => { root.tab = 0; }
+                            context-clicked => { media-switcher.open-menu(); }
                         }
-                        // Beside Media: the page
-                        // number is the last one handed out, not the place.
                         LibraryTab {
                             glyph: Glyph.music;
                             label: I18n.t("common.audio");
                             current: root.tab == 8;
                             clicked => { root.tab = 8; }
+                            context-clicked => { media-switcher.open-menu(); }
                         }
                         LibraryTab {
                             glyph: Glyph.text-mark;
                             label: I18n.t("mediaPane.textAndCaptions");
                             current: root.tab == 1;
                             clicked => { root.tab = 1; }
+                            context-clicked => { media-switcher.open-menu(); }
                         }
                         LibraryTab {
                             glyph: Glyph.sticker;
                             label: I18n.t("mediaPane.stickers");
                             current: root.tab == 2;
                             clicked => { root.tab = 2; }
+                            context-clicked => { media-switcher.open-menu(); }
                         }
                         LibraryTab {
                             glyph: Glyph.transition;
                             label: I18n.t("mediaPane.transitions");
                             current: root.tab == 3;
                             clicked => { root.tab = 3; }
+                            context-clicked => { media-switcher.open-menu(); }
                         }
                         LibraryTab {
                             glyph: Glyph.sparkle;
                             label: I18n.t("common.effects");
                             current: root.tab == 4;
                             clicked => { root.tab = 4; }
+                            context-clicked => { media-switcher.open-menu(); }
                         }
                         LibraryTab {
                             glyph: Glyph.filter;
                             label: I18n.t("mediaPane.filters");
                             current: root.tab == 5;
                             clicked => { root.tab = 5; }
+                            context-clicked => { media-switcher.open-menu(); }
                         }
-                        // Beside Filters: the page
-                        // number is the last one handed out, not the place.
                         LibraryTab {
                             glyph: Glyph.sun;
                             label: I18n.t("mediaPane.adjustments");
                             current: root.tab == 7;
                             clicked => { root.tab = 7; }
+                            context-clicked => { media-switcher.open-menu(); }
                         }
                         LibraryTab {
                             glyph: Glyph.slot;
                             label: I18n.t("mediaPane.templates");
                             current: root.tab == 6;
                             clicked => { root.tab = 6; }
+                            context-clicked => { media-switcher.open-menu(); }
                         }
                         }
                     }
 
-                    // The end buttons, over the strip, each there only while
-                    // there is something past its end to go to.
                     if strip.content-x < 0px: StripEnd {
                         x: 0;
                         height: parent.height;
@@ -2096,13 +2105,9 @@ export component MediaPane inherits Rectangle {
                     }
                 }
 
-                // Outside the sunken track, not in it: the track holds the
-                // pages of *this* view and this button changes which view the
-                // pane is, which is a different question about a different
-                // thing.
                 VerticalLayout {
                     alignment: center;
-                    PaneSwitcher {
+                    media-switcher := PaneSwitcher {
                         kind: PaneKind.media;
                         seat: root.pane-seat;
                         removable: root.pane-removable;

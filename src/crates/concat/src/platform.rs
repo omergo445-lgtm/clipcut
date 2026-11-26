@@ -1272,7 +1272,7 @@ mod tests {
     fn a_folder_dialog_starts_at_a_folder_that_exists() {
         let root = std::env::temp_dir().join(format!("concat-pick-{}", std::process::id()));
         std::fs::create_dir_all(&root).unwrap();
-        let missing = root.join("Concat");
+        let missing = root.join("ClipCut");
         assert_eq!(
             existing_folder(&missing.to_string_lossy()),
             Some(root.as_path())

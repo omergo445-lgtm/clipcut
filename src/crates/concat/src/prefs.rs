@@ -105,6 +105,20 @@ pub struct Preferences {
     /// place the moment the choice is made.
     /// https://github.com/jub0t/Concat/issues/320
     pub ui_scale: Option<u32>,
+    /// Surface palette preset (`0 = Obsidian`, `1 = OLED`, `2 = Midnight`, `3 = Graphite`, `4 = Light`, `5 = Custom`).
+    pub surface_mode: Option<i32>,
+    /// Custom surface panel colour (`#rrggbb`), used when `surface_mode == Some(5)`.
+    pub surface_custom: Option<String>,
+    /// Corner radius style (`0 = Sharp`, `1 = Crisp`, `2 = Balanced`, `3 = Rounded`).
+    pub corner_style: Option<i32>,
+    /// Control density (`0 = Compact`, `1 = Comfortable`, `2 = Spacious`).
+    pub ui_density: Option<i32>,
+    /// Font size offset index (`0 = Small`, `1 = Default`, `2 = Medium`, `3 = Large`).
+    pub font_choice: Option<i32>,
+    /// Workspace split gutter spacing (`0 = Seamless`, `1 = Tight`, `2 = Default`, `3 = Airy`).
+    pub gutter_style: Option<i32>,
+    /// Optional 1px outlines around workspace panels.
+    pub panel_borders: bool,
     /// The chosen transcriber model id, e.g. "base.en".
     pub transcriber_model: Option<String>,
     /// The language the captions sheet last asked the transcriber for, by

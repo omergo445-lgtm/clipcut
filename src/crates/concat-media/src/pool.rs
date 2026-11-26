@@ -59,7 +59,7 @@ use crate::probe;
 const ROLL_FORWARD_FRAMES: i64 = 60;
 
 /// The most threads a pool reader's codec decodes on; see `Reader::open`.
-const READER_THREADS: u16 = 8;
+const READER_THREADS: u16 = 4;
 
 /// The threads a pool reader's codec decodes on: one a core up to
 /// [`READER_THREADS`]. Each of a frame-threaded decoder's threads holds
@@ -76,10 +76,9 @@ fn reader_threads() -> u16 {
     })
 }
 
-/// Warm readers one file at one level may hold: enough for the two sides of
-/// a transition within a file and a scrub elsewhere in it, few enough that
-/// a 4K file does not hold a decoder per playback worker.
-const READERS_PER_KEY: usize = 4;
+/// Warm readers one file at one level may hold: capped at 2 for ClipCut's
+/// compact ~500 MB memory budget.
+const READERS_PER_KEY: usize = 2;
 
 /// What one frame request asks for; see [`ReaderPool::frame`].
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
@@ -757,29 +756,28 @@ impl ReaderPool {
         }
     }
 
-    /// 512 MB of frames, eight warm readers - enough for a busy timeline.
+    /// 192 MB of frames, four warm readers — tuned for ClipCut's ~512 MB budget.
     pub fn with_defaults() -> Self {
-        Self::new(512 * 1024 * 1024, 8)
+        Self::new(192 * 1024 * 1024, 4)
     }
 
     /// The frame cache a machine with `total_memory` bytes of RAM gets:
-    /// tuned for 16 GB RAM paired with low-VRAM discrete GPUs (3/16 of RAM,
-    /// between 256 MB and 3 GB — 3 GB on a 16 GB machine). Unknown memory
-    /// gets the 512 MB the pool always had.
+    /// capped at 192 MB so ClipCut's entire process footprint stays around
+    /// half a gigabyte even during multi-track playback and scrubbing.
     pub fn frame_budget(total_memory: Option<u64>) -> usize {
         const MB: u64 = 1024 * 1024;
         let bytes = match total_memory {
-            Some(total) => (total * 3 / 16).clamp(256 * MB, 3072 * MB),
-            None => 512 * MB,
+            Some(total) => (total / 16).clamp(96 * MB, 192 * MB),
+            None => 192 * MB,
         };
         usize::try_from(bytes).unwrap_or(usize::MAX)
     }
 
     /// A pool sized for a machine with `total_memory` bytes of RAM; see
-    /// [`ReaderPool::frame_budget`]. Twelve warm readers at most, and those
+    /// [`ReaderPool::frame_budget`]. Four warm readers at most, and those
     /// not asked for in a while are closed by [`ReaderPool::close_idle`].
     pub fn sized_for(total_memory: Option<u64>) -> Self {
-        Self::new(Self::frame_budget(total_memory), 12)
+        Self::new(Self::frame_budget(total_memory), 4)
     }
 
     /// How many frames have been asked of the pool so far: unchanged

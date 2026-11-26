@@ -89,8 +89,8 @@ impl RunFile {
         let mut last = None;
         for attempt in 1..=9 {
             let name = match attempt {
-                1 => format!("concat-{stamp}.log"),
-                _ => format!("concat-{stamp}-{attempt}.log"),
+                1 => format!("clipcut-{stamp}.log"),
+                _ => format!("clipcut-{stamp}-{attempt}.log"),
             };
             let path = folder.join(name);
             match std::fs::OpenOptions::new()
@@ -216,7 +216,10 @@ fn runs(folder: &Path) -> Vec<PathBuf> {
         .filter(|path| {
             path.file_name()
                 .and_then(|name| name.to_str())
-                .is_some_and(|name| name.starts_with("concat-") && name.ends_with(".log"))
+                .is_some_and(|name| {
+                    (name.starts_with("clipcut-") || name.starts_with("concat-"))
+                        && name.ends_with(".log")
+                })
         })
         .collect()
 }

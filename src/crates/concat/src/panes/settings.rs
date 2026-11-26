@@ -630,7 +630,7 @@ impl SettingsPane {
                 match result {
                     Ok(Installed::InstallerRunning) => {
                         log::info!(
-                            "update: the installer for {version} is running · Concat closes for it"
+                            "update: the installer for {version} is running · ClipCut closes for it"
                         );
                         studio.notify(&tf("settings.installerOpened", &[&version]), false);
                         quit_for_switch("for an update", || {});
@@ -639,7 +639,7 @@ impl SettingsPane {
                         // The bundle on disk is already the new build; what
                         // is left is to start it, and that waits on the
                         // project being saved.
-                        log::info!("update: {version} is in place · Concat starts it");
+                        log::info!("update: {version} is in place · ClipCut starts it");
                         studio.notify(&tf("settings.versionInstalled", &[&version]), false);
                         quit_for_switch("for an update", move || {
                             if let Err(error) = updates::relaunch() {
@@ -1123,7 +1123,7 @@ pub(crate) fn restart(project: Option<std::path::PathBuf>) {
     quit_for_switch("restarting for a setting", move || {
         if let Err(error) = updates::restart(project.as_deref()) {
             log::warn!(
-                "close: wanted Concat started again after this one closes, and could not arrange it: {error}; start it by hand"
+                "close: wanted ClipCut started again after this one closes, and could not arrange it: {error}; start it by hand"
             );
         }
     });
@@ -1164,7 +1164,7 @@ const LOG_LEVEL_NAMES: [&str; 5] = ["Errors only", "Warnings", "Normal", "Debug"
 /// [`SourcePreference::ALL`]'s order, for the log's line.
 const DOWNLOAD_SOURCE_NAMES: [&str; 5] = [
     "Automatic",
-    "Concat's mirror",
+    "ClipCut mirror",
     "hf-mirror.com",
     "Original source",
     "Custom URL",

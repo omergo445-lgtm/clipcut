@@ -113,9 +113,23 @@ use skrifa::{
 
 const HINTER_CACHE_CAPACITY: NonZeroUsize = NonZeroUsize::new(32).unwrap();
 const GLYPH_CACHE_CAPACITY: NonZeroUsize = NonZeroUsize::new(4096).unwrap();
+const ATLAS_DIM: i32 = 1024;
+const MAX_SPRITE_DIM: i32 = 128;
+
+#[derive(Clone, Copy)]
+pub struct GlyphSprite {
+    pub generation: u64,
+    pub uv: skia_safe::Rect,
+    pub offset_x: f32,
+    pub offset_y: f32,
+}
 
 #[derive(Clone)]
 pub enum CachedGlyph {
+    Sprite {
+        path: skia_safe::Path,
+        sprite: GlyphSprite,
+    },
     Path(skia_safe::Path),
     Blank,
     ColorOrBitmapFallback,
@@ -158,13 +172,29 @@ impl OutlinePen for SkiaOutlinePen<'_> {
 pub struct GlyphOutlineCache {
     hinters: CLruCache<(HashedBlob, u32, u32, u64), Option<HintingInstance>>,
     glyphs: CLruCache<(HashedBlob, u32, u32, u64, u32), CachedGlyph>,
+    atlas_surface: Option<skia_safe::Surface>,
+    atlas_snapshot: Option<skia_safe::Image>,
+    atlas_generation: u64,
+    shelf_x: i32,
+    shelf_y: i32,
+    shelf_h: i32,
 }
 
 impl Default for GlyphOutlineCache {
     fn default() -> Self {
+        let mut atlas_surface = skia_safe::surfaces::raster_n32_premul((ATLAS_DIM, ATLAS_DIM));
+        if let Some(ref mut surface) = atlas_surface {
+            surface.canvas().clear(skia_safe::Color::TRANSPARENT);
+        }
         Self {
             hinters: CLruCache::new(HINTER_CACHE_CAPACITY),
             glyphs: CLruCache::new(GLYPH_CACHE_CAPACITY),
+            atlas_surface,
+            atlas_snapshot: None,
+            atlas_generation: 1,
+            shelf_x: 1,
+            shelf_y: 1,
+            shelf_h: 0,
         }
     }
 }
@@ -193,6 +223,70 @@ impl GlyphOutlineCache {
         (size_26_6, snapped_ppem, coords_hash, style_hash, shear)
     }
 
+    pub fn atlas_image(&mut self) -> Option<skia_safe::Image> {
+        if let Some(ref img) = self.atlas_snapshot {
+            return Some(img.clone());
+        }
+        let surface = self.atlas_surface.as_mut()?;
+        let snapshot = surface.image_snapshot();
+        self.atlas_snapshot = Some(snapshot.clone());
+        Some(snapshot)
+    }
+
+    fn pack_path_into_atlas(&mut self, path: &skia_safe::Path) -> Option<GlyphSprite> {
+        let bounds = path.compute_tight_bounds();
+        let left = bounds.left.floor() as i32 - 1;
+        let top = bounds.top.floor() as i32 - 1;
+        let right = bounds.right.ceil() as i32 + 1;
+        let bottom = bounds.bottom.ceil() as i32 + 1;
+        let w = right - left;
+        let h = bottom - top;
+        if w <= 0 || h <= 0 || w > MAX_SPRITE_DIM || h > MAX_SPRITE_DIM {
+            return None;
+        }
+
+        let surface = self.atlas_surface.as_mut()?;
+        if self.shelf_x + w + 1 > ATLAS_DIM {
+            self.shelf_x = 1;
+            self.shelf_y += self.shelf_h + 1;
+            self.shelf_h = 0;
+        }
+        if self.shelf_y + h + 1 > ATLAS_DIM {
+            self.atlas_generation = self.atlas_generation.wrapping_add(1).max(1);
+            self.shelf_x = 1;
+            self.shelf_y = 1;
+            self.shelf_h = 0;
+            surface.canvas().clear(skia_safe::Color::TRANSPARENT);
+        }
+
+        let ax = self.shelf_x;
+        let ay = self.shelf_y;
+        self.shelf_x += w + 1;
+        self.shelf_h = self.shelf_h.max(h);
+
+        let canvas = surface.canvas();
+        canvas.save();
+        canvas.clip_rect(
+            skia_safe::Rect::from_xywh(ax as f32, ay as f32, w as f32, h as f32),
+            None,
+            false,
+        );
+        canvas.translate(((ax - left) as f32, (ay - top) as f32));
+        let mut white = skia_safe::Paint::default();
+        white.set_color(skia_safe::Color::WHITE);
+        white.set_anti_alias(true);
+        canvas.draw_path(path, &white);
+        canvas.restore();
+        self.atlas_snapshot = None;
+
+        Some(GlyphSprite {
+            generation: self.atlas_generation,
+            uv: skia_safe::Rect::from_xywh(ax as f32, ay as f32, w as f32, h as f32),
+            offset_x: left as f32,
+            offset_y: top as f32,
+        })
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub fn glyph_outline(
         &mut self,
@@ -208,8 +302,21 @@ impl GlyphOutlineCache {
         glyph_id: u32,
     ) -> CachedGlyph {
         let glyph_key = (blob.clone(), font.index, size_26_6, style_hash, glyph_id);
-        if let Some(cached) = self.glyphs.get(&glyph_key) {
-            return cached.clone();
+        if let Some(cached) = self.glyphs.get(&glyph_key).cloned() {
+            if let CachedGlyph::Sprite { ref path, sprite } = cached
+                && sprite.generation != self.atlas_generation
+            {
+                let refreshed = match self.pack_path_into_atlas(path) {
+                    Some(new_sprite) => CachedGlyph::Sprite {
+                        path: path.clone(),
+                        sprite: new_sprite,
+                    },
+                    None => CachedGlyph::Path(path.clone()),
+                };
+                self.glyphs.put(glyph_key, refreshed.clone());
+                return refreshed;
+            }
+            return cached;
         }
 
         let Ok(font_ref) = FontRef::from_index(font.data.as_ref(), font.index) else {
@@ -271,7 +378,11 @@ impl GlyphOutlineCache {
         let entry = if !drew || builder.is_empty() {
             CachedGlyph::Blank
         } else {
-            CachedGlyph::Path(builder.detach())
+            let path = builder.detach();
+            match self.pack_path_into_atlas(&path) {
+                Some(sprite) => CachedGlyph::Sprite { path, sprite },
+                None => CachedGlyph::Path(path),
+            }
         };
 
         self.glyphs.put(glyph_key, entry.clone());

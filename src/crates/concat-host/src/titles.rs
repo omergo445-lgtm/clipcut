@@ -95,24 +95,16 @@ pub struct Titles {
 /// frame's size - 8 MB at 1080p, 33 MB at 4K - so a count cost four times
 /// as much on a 4K timeline as on an HD one. 128 MB keeps sixteen HD
 /// paintings or four 4K ones.
-const LIVE_BYTES: usize = 128 * 1024 * 1024;
+const LIVE_BYTES: usize = 48 * 1024 * 1024;
 
 /// The most the paintings of the titles on the timeline may hold between
-/// them, in bytes of pixels: 64 HD titles, or 256 at the monitor's half
-/// size. Past it the first painted are kept and the rest painted again
-/// each time; see [`LivePaintings::keep`].
-const LIVE_CEILING: usize = 512 * 1024 * 1024;
+/// them, in bytes of pixels: capped at 96 MB for ClipCut's ~512 MB budget.
+const LIVE_CEILING: usize = 96 * 1024 * 1024;
 
-/// A `1 / part` share of a machine's `total` memory, never less than
-/// `floor`: what the live paintings may hold on a machine that has more
-/// to give. On 16 GB, half a gigabyte kept and two in all; on 64 GB, two
-/// and eight - several hundred captions at the monitor's size, held as a
-/// drag repaints the one being moved, where a fixed ceiling painted every
-/// caption past it again at each step.
-fn live_share(total: Option<u64>, part: u64, floor: usize) -> usize {
-    total
-        .and_then(|total| usize::try_from(total / part).ok())
-        .map_or(floor, |share| share.max(floor))
+/// Compact live-painting cache share capped to `floor` so ClipCut stays
+/// well within its half-gigabyte memory envelope.
+fn live_share(_total: Option<u64>, _part: u64, floor: usize) -> usize {
+    floor
 }
 
 /// One live painting, and the pass that last asked for it.

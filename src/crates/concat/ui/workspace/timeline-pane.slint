@@ -308,14 +308,17 @@ export component TimelinePane inherits Rectangle {
         TimelineTabs {
             tabs: root.tabs;
             current: root.current-tab;
+            pane-removable: root.pane-removable;
 
             selected(index) => { root.tab-selected(index); }
             renamed(index, name) => { root.tab-renamed(index, name); }
             close-requested(index) => { root.tab-close-requested(index); }
             added => { root.tab-added(); }
             moved(from, to) => { root.tab-moved(from, to); }
+            pane-removed => { root.pane-removed(); }
+            pane-context-clicked => { timeline-switcher.open-menu(); }
 
-            PaneSwitcher {
+            timeline-switcher := PaneSwitcher {
                 kind: PaneKind.timeline;
                 seat: root.pane-seat;
                 removable: root.pane-removable;

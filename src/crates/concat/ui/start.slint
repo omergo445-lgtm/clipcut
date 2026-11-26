@@ -1658,10 +1658,6 @@ component EmptyProjects inherits Rectangle {
 // at the foot of its sidebar, the narrow one as a list at its own foot. The
 // phone has no Shortcuts page in its Settings, so it has no line for one.
 global Links {
-    out property <HomeLink> docs: {
-        name: "guides", glyph: Glyph.book, external: true,
-        title: I18n.t("start.documentation"),
-    };
     out property <HomeLink> keys: {
         name: "shortcuts", glyph: Glyph.keyboard, external: false,
         title: I18n.t("start.keyboardShortcuts"),
@@ -1670,110 +1666,12 @@ global Links {
         name: "github", glyph: Glyph.github, external: true,
         title: "GitHub",
     };
-    out property <HomeLink> chat: {
-        name: "discord", glyph: Glyph.discord, external: true,
-        title: "Discord",
-    };
-    out property <HomeLink> report: {
-        name: "report", glyph: Glyph.bug, external: true,
-        title: I18n.t("start.reportProblem"),
-    };
-    out property <[HomeLink]> desk: [docs, keys, code, chat, report];
-    out property <[HomeLink]> phone: [docs, code, chat, report];
-}
-
-// A soft light of colour behind the news card: a radial fade from `tint`
-// to nothing, sized and placed by its parent, so several overlap into one
-// glow the way paint runs together.
-component Glow inherits Rectangle {
-    in property <color> tint;
-    border-radius: self.width / 2;
-    background: @radial-gradient(circle, root.tint 0%, root.tint.with-alpha(0.55) 34%, root.tint.with-alpha(0) 70%);
-}
-
-// What is new in Concat, as a card of warm light: orange running into
-// rose, magenta and a deep violet, with the line in large white type over
-// it. Its own colours in either theme - it is a picture, not a surface -
-// and a press opens the post that tells the rest.
-component NewsCard inherits Pressable {
-    in property <string> title;
-    in property <string> note;
-    /// The type steps down on a short card.
-    in property <bool> compact;
-    /// And again in the sidebar, where the card is a couple of hundred
-    /// pixels across.
-    in property <bool> small;
-
-    label: root.title;
-    radius: root.small ? 14px : root.compact ? 22px : 28px;
-    background: #e5475f;
-    clip: true;
-
-    Glow { x: -root.width * 0.55; y: root.height * 0.05; width: root.width * 1.25; height: self.width; tint: #f8b640; }
-    Glow { x: root.width * 0.35; y: -root.height * 0.9; width: root.width * 1.0; height: self.width; tint: #f06a3c; }
-    Glow { x: root.width * 0.25; y: root.height * 0.05; width: root.width * 0.95; height: self.width; tint: #e43fd6; }
-    Glow { x: root.width * 0.5; y: root.height * 0.25; width: root.width * 1.0; height: self.width; tint: #4a12d9; }
-    Glow { x: root.width * 0.72; y: root.height * 0.55; width: root.width * 0.7; height: self.width; tint: #3a0bc2; }
-    Glow { x: -root.width * 0.3; y: root.height * 0.72; width: root.width * 0.55; height: self.width; tint: #5c0f3c; }
-
-    // A wash of light under the pointer, the card's own hover.
-    Rectangle {
-        background: #ffffff;
-        opacity: root.lit ? 0.07 : 0.0;
-        animate opacity { duration: 160ms; easing: cubic-bezier(0.16, 1, 0.3, 1); }
-    }
-
-    VerticalLayout {
-        padding: root.small ? 16px : root.compact ? 22px : 30px;
-        spacing: 10px;
-
-        Text {
-            text: root.title;
-            color: #ffffff;
-            font-size: root.small ? 19px : root.compact ? 24px : 31px;
-            font-weight: 500;
-            letter-spacing: root.small ? -0.3px : -0.6px;
-            wrap: word-wrap;
-            vertical-stretch: 1;
-            vertical-alignment: top;
-        }
-
-        HorizontalLayout {
-            spacing: 6px;
-            Text {
-                text: root.note;
-                color: #ffffff;
-                opacity: 0.9;
-                font-size: root.small ? Theme.fs : Theme.fs-lg;
-                font-weight: 500;
-                wrap: word-wrap;
-                horizontal-stretch: 1;
-            }
-            VerticalLayout {
-                alignment: end;
-                Icon {
-                    glyph: Glyph.arrow-up-right;
-                    size: 14px;
-                    weight: 2.2;
-                    tint: #ffffff;
-                }
-            }
-        }
-    }
+    out property <[HomeLink]> desk: [keys, code];
+    out property <[HomeLink]> phone: [code];
 }
 
 // ── the screen ───────────────────────────────────────────────────────────
 
-// The wide page: a desk's window, from 680px across to a 4K screen.
-//
-// Two panels on the window's ground, the shape a creative tool's home has:
-//
-// - a sidebar that stays put: the verbs at its head - New project, Open
-//   project and, where CapCut has drafts here, Import - then what is new in
-//   this version, and the page's links as a column of lines at its foot;
-// - the projects, in a panel of their own that takes every pixel the
-//   sidebar leaves and scrolls by itself, so the verbs and the links never
-//   leave the screen however many projects there are.
 component WideHome inherits Rectangle {
     in property <[RecentProjectData]> recents;
     in property <int> recents-total;
@@ -1782,7 +1680,6 @@ component WideHome inherits Rectangle {
     in property <bool> busy;
     in property <string> version;
     in property <bool> can-drop;
-    /// CapCut has drafts on this machine, which can come in as projects.
     in property <bool> capcut;
 
     callback compose();
@@ -1795,17 +1692,13 @@ component WideHome inherits Rectangle {
     callback sort-changed(sort: int);
     callback link(name: string);
 
-    /// Between the panels, and between them and the window's edges.
     property <length> gutter: 12px;
-    /// The title strip is the margin above; the panels start just under it.
     property <length> top: 4px;
     property <length> panel-h: root.height - root.top - root.gutter;
     property <length> side-w: root.width >= 1180px ? 248px : 216px;
-    /// The margin the projects keep from their panel's edges.
     property <length> inset: Math.max(20px, Math.min(36px, main.width / 28));
     property <bool> searchable: root.recents-total > 8;
     property <length> greeting-size: Math.max(26px, Math.min(32px, main.width / 34));
-    /// No room for the greeting and the tools on one row.
     property <bool> stacked: main.width < 820px;
 
     // ── the sidebar ──────────────────────────────────────────────────
@@ -1816,14 +1709,6 @@ component WideHome inherits Rectangle {
         height: root.panel-h;
         border-radius: 18px;
         background: Theme.launch-panel;
-
-        property <int> verbs: root.capcut ? 3 : 2;
-        property <length> verbs-h: self.verbs * 44px + (self.verbs - 1) * 8px;
-        property <length> links-h: Links.desk.length * 34px;
-        property <length> news-h: 156px;
-        /// The news card is the one thing here a short window can do
-        /// without: the verbs and the links keep their room first.
-        property <bool> news: self.height >= self.verbs-h + self.links-h + self.news-h + 64px;
 
         VerticalLayout {
             padding: 12px;
@@ -1840,7 +1725,7 @@ component WideHome inherits Rectangle {
                 VerticalLayout {
                     alignment: center;
                     Image {
-                        source: @image-url("assets/concat-logo.png");
+                        source: @image-url("assets/clipcut-logo.png");
                         width: 34px;
                         height: 34px;
                         image-fit: contain;
@@ -1889,14 +1774,6 @@ component WideHome inherits Rectangle {
             }
 
             Rectangle { vertical-stretch: 1; }
-
-            if side.news: NewsCard {
-                height: side.news-h;
-                small: true;
-                title: I18n.t1("start.whatsNew", root.version);
-                note: I18n.t("start.newsNote");
-                clicked => { root.link("news"); }
-            }
 
             VerticalLayout {
                 padding-top: 4px;
@@ -2204,17 +2081,7 @@ component NarrowHome inherits Rectangle {
                 forgotten => { root.forget-recent(project.path); }
             }
 
-            Rectangle { height: 32px; }
-
-            NewsCard {
-                height: 150px;
-                compact: true;
-                title: I18n.t1("start.whatsNew", root.version);
-                note: I18n.t("start.newsNote");
-                clicked => { root.link("news"); }
-            }
-
-            Rectangle { height: 12px; }
+            Rectangle { height: 24px; }
 
             // The page's links, as the sidebar's foot has them on a desk:
             // one line each, on one surface.

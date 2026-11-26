@@ -13,7 +13,7 @@
 /// built it from - "local" for a build from a working tree.
 pub fn build() -> String {
     format!(
-        "Concat {} · {}-{} · commit {}",
+        "ClipCut {} · {}-{} · commit {}",
         env!("CARGO_PKG_VERSION"),
         std::env::consts::OS,
         std::env::consts::ARCH,

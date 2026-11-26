@@ -6,7 +6,7 @@
 use std::ffi::OsString;
 use std::path::PathBuf;
 
-const USAGE: &str = "usage: concat [--project <PROJECT_DIRECTORY> | --software | --mcp [auto|window|headless] | --schema | --version | --smoke | --smoke-export <CLIP> | --whisper-cpu]";
+const USAGE: &str = "usage: clipcut [--project <PROJECT_DIRECTORY> | --software | --mcp [auto|window|headless] | --schema | --version | --smoke | --smoke-export <CLIP> | --whisper-cpu]";
 
 /// The flag the window starts its encoder helper with.
 pub const PROBE_ENCODERS: &str = concat_media::encode::apart::FLAG;

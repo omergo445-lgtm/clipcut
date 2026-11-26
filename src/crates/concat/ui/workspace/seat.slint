@@ -94,6 +94,9 @@ export component Seat inherits Rectangle {
         height: root.kind == PaneKind.timeline ? 33px : 52px;
         kind: root.kind;
         seat: root.index;
+        removable: Editor.seats.length > 1;
+        picked(kind) => { root.picked(kind); }
+        removed => { root.removed(); }
     }
 
     if root.kind == PaneKind.media: MediaPane {

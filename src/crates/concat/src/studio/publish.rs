@@ -175,14 +175,15 @@ impl Studio {
     pub fn dock_layout(&self) -> DockLayout {
         let mut out = DockLayout::default();
         let (width, height) = self.workspace;
-        if width > SEAT_GAP * 2.0 && height > SEAT_GAP * 2.0 {
+        let gap = seat_gap();
+        if width > gap * 2.0 && height > gap * 2.0 {
             lay_out(
                 &self.dock,
                 (
-                    SEAT_GAP,
-                    SEAT_GAP,
-                    width - 2.0 * SEAT_GAP,
-                    height - 2.0 * SEAT_GAP,
+                    gap,
+                    gap,
+                    width - 2.0 * gap,
+                    height - 2.0 * gap,
                 ),
                 &mut out,
             );

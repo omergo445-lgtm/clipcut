@@ -340,7 +340,7 @@ pub fn cpu_backend() -> Result<String, String> {
                 }
             }
             Err(format!(
-                "whisper's CPU kernels (ggml-cpu-*) are missing from {} - reinstall Concat",
+                "whisper's CPU kernels (ggml-cpu-*) are missing from {} - reinstall ClipCut",
                 folders[0].display()
             ))
         })
@@ -477,7 +477,7 @@ fn speech_spans(dirs: &AppDirs, samples: &[f32], threads: usize) -> Option<Vec<(
     let spans = vad_model(dirs).and_then(|path| {
         let path = path
             .to_str()
-            .ok_or_else(|| format!("{} is not a path Concat can open", path.display()))?
+            .ok_or_else(|| format!("{} is not a path ClipCut can open", path.display()))?
             .to_owned();
         let mut context_params = WhisperVadContextParams::new();
         context_params.set_n_threads(threads as i32);

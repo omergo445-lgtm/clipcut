@@ -1034,19 +1034,30 @@ impl<'a> LayerRenderer<'a> for SkiaItemRenderer<'a> {
     }
 }
 
+#[derive(Clone)]
+pub struct SkiaTextBrush {
+    paint: skia_safe::Paint,
+    solid_color: Option<skia_safe::Color>,
+}
+
 impl GlyphRenderer for SkiaItemRenderer<'_> {
-    type PlatformBrush = skia_safe::Paint;
+    type PlatformBrush = SkiaTextBrush;
 
     fn platform_text_fill_brush(
         &mut self,
         brush: i_slint_core::Brush,
         size: LogicalSize,
     ) -> Option<Self::PlatformBrush> {
-        self.brush_to_paint(
+        let solid_color = match &brush {
+            i_slint_core::Brush::SolidColor(c) => Some(to_skia_color(c)),
+            _ => None,
+        };
+        let paint = self.brush_to_paint(
             brush,
             size.width_length() * self.scale_factor,
             size.height_length() * self.scale_factor,
-        )
+        )?;
+        Some(SkiaTextBrush { paint, solid_color })
     }
 
     fn platform_brush_for_color(
@@ -1058,7 +1069,10 @@ impl GlyphRenderer for SkiaItemRenderer<'_> {
         } else {
             let mut paint = self.default_paint().unwrap_or_default();
             paint.set_shader(crate::color_shader(color));
-            Some(paint)
+            Some(SkiaTextBrush {
+                paint,
+                solid_color: Some(to_skia_color(color)),
+            })
         }
     }
 
@@ -1069,18 +1083,20 @@ impl GlyphRenderer for SkiaItemRenderer<'_> {
         size: LogicalSize,
     ) -> Option<Self::PlatformBrush> {
         match self.brush_to_paint(
-            brush.clone(),
+            brush,
             size.width_length() * self.scale_factor,
             size.height_length() * self.scale_factor,
         ) {
             Some(mut stroke_paint) => {
                 stroke_paint.set_style(skia_safe::PaintStyle::Stroke);
                 stroke_paint.set_stroke_width(physical_stroke_width);
-                // Set stroke cap/join/miter to match FemtoVG
                 stroke_paint.set_stroke_cap(skia_safe::PaintCap::Butt);
                 stroke_paint.set_stroke_join(skia_safe::PaintJoin::Miter);
                 stroke_paint.set_stroke_miter(10.0);
-                Some(stroke_paint)
+                Some(SkiaTextBrush {
+                    paint: stroke_paint,
+                    solid_color: None,
+                })
             }
             None => None,
         }
@@ -1107,14 +1123,22 @@ impl GlyphRenderer for SkiaItemRenderer<'_> {
                 hinted,
             );
 
+        let can_use_atlas = brush.solid_color.is_some()
+            && !synthesis.embolden()
+            && brush.paint.style() == skia_safe::PaintStyle::Fill;
+        let solid_color = brush.solid_color.unwrap_or(skia_safe::Color::WHITE);
+
+        let mut xforms: Vec<skia_safe::RSXform> = Vec::new();
+        let mut tex_rects: Vec<skia_safe::Rect> = Vec::new();
+        let mut colors: Vec<skia_safe::Color> = Vec::new();
         let mut run_builder =
             skia_safe::PathBuilder::new_with_fill_type(skia_safe::PathFillType::Winding);
         let mut fallback_glyphs: Vec<(skia_safe::GlyphId, skia_safe::Point)> = Vec::new();
         let y_off = y_offset.get();
 
-        crate::font_cache::GLYPH_OUTLINE_CACHE.with_borrow_mut(|outline_cache| {
+        let atlas_img = crate::font_cache::GLYPH_OUTLINE_CACHE.with_borrow_mut(|outline_cache| {
             for g in glyphs_it {
-                let gx = g.x;
+                let gx = if dense { g.x } else { g.x.round() };
                 let gy = if dense { g.y + y_off } else { (g.y + y_off).round() };
                 match outline_cache.glyph_outline(
                     &blob,
@@ -1128,20 +1152,67 @@ impl GlyphRenderer for SkiaItemRenderer<'_> {
                     hinted,
                     g.id,
                 ) {
+                    crate::font_cache::CachedGlyph::Sprite { path, sprite } => {
+                        if can_use_atlas {
+                            xforms.push(skia_safe::RSXform::new(
+                                1.0,
+                                0.0,
+                                (gx + sprite.offset_x, gy + sprite.offset_y),
+                            ));
+                            tex_rects.push(sprite.uv);
+                            colors.push(solid_color);
+                        } else {
+                            run_builder.add_path_with_offset(&path, (g.x, gy), None);
+                        }
+                    }
                     crate::font_cache::CachedGlyph::Path(glyph_path) => {
-                        run_builder.add_path_with_offset(&glyph_path, (gx, gy), None);
+                        run_builder.add_path_with_offset(&glyph_path, (g.x, gy), None);
                     }
                     crate::font_cache::CachedGlyph::Blank => {}
                     crate::font_cache::CachedGlyph::ColorOrBitmapFallback => {
-                        fallback_glyphs.push((g.id as skia_safe::GlyphId, skia_safe::Point::new(gx, gy)));
+                        fallback_glyphs
+                            .push((g.id as skia_safe::GlyphId, skia_safe::Point::new(g.x, gy)));
                     }
                 }
             }
+            if !xforms.is_empty() {
+                outline_cache.atlas_image()
+            } else {
+                None
+            }
         });
+
+        if !xforms.is_empty()
+            && let Some(atlas) = atlas_img
+        {
+            let sampling = skia_safe::SamplingOptions::new(
+                if dense {
+                    skia_safe::FilterMode::Linear
+                } else {
+                    skia_safe::FilterMode::Nearest
+                },
+                skia_safe::MipmapMode::None,
+            );
+            let mut atlas_paint = skia_safe::Paint::default();
+            atlas_paint.set_alpha_f(brush.paint.alpha_f());
+            if let Some(bm) = brush.paint.as_blend_mode() {
+                atlas_paint.set_blend_mode(bm);
+            }
+            self.canvas.draw_atlas(
+                &atlas,
+                &xforms,
+                &tex_rects,
+                Some(colors.as_slice()),
+                skia_safe::BlendMode::Modulate,
+                sampling,
+                None,
+                Some(&atlas_paint),
+            );
+        }
 
         if !run_builder.is_empty() {
             let run_path = run_builder.detach();
-            let mut paint = brush.clone();
+            let mut paint = brush.paint.clone();
             paint.set_anti_alias(true);
             if synthesis.embolden() && paint.style() == skia_safe::PaintStyle::Fill {
                 paint.set_style(skia_safe::PaintStyle::StrokeAndFill);
@@ -1165,7 +1236,7 @@ impl GlyphRenderer for SkiaItemRenderer<'_> {
                 skia_safe::canvas::GlyphPositions::Points(&glyph_positions),
                 skia_safe::Point::default(),
                 &sk_font,
-                &brush,
+                &brush.paint,
             );
         }
     }
@@ -1173,7 +1244,7 @@ impl GlyphRenderer for SkiaItemRenderer<'_> {
     fn fill_rectangle(
         &mut self,
         physical_rect: sharedparley::PhysicalRect,
-        paint: Self::PlatformBrush,
+        brush: Self::PlatformBrush,
         radius: sharedparley::PhysicalLength,
         border: Option<sharedparley::RectangleBorder<Self::PlatformBrush>>,
     ) {
@@ -1185,16 +1256,17 @@ impl GlyphRenderer for SkiaItemRenderer<'_> {
         );
 
         if radius.get() <= 0.0 && border.is_none() {
-            self.canvas.draw_rect(rect, &paint);
+            self.canvas.draw_rect(rect, &brush.paint);
             return;
         }
 
         let rrect = skia_safe::RRect::new_rect_xy(rect, radius.get(), radius.get());
-        self.canvas.draw_rrect(rrect, &paint);
+        self.canvas.draw_rrect(rrect, &brush.paint);
 
-        if let Some(sharedparley::RectangleBorder { brush: mut stroke_paint, width }) = border
+        if let Some(sharedparley::RectangleBorder { brush: stroke_brush, width }) = border
             && width.get() > 0.0
         {
+            let mut stroke_paint = stroke_brush.paint;
             stroke_paint.set_style(skia_safe::PaintStyle::Stroke);
             stroke_paint.set_stroke_width(width.get());
             stroke_paint.set_anti_alias(true);

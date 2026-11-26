@@ -281,7 +281,7 @@ impl Logger {
         };
         if let Some(file) = &mut state.file {
             file.write(&format!(
-                "Concat log · {} · times are UTC\n",
+                "ClipCut log · {} · times are UTC\n",
                 clock::date(at)
             ));
         }

@@ -72,7 +72,7 @@ const PCM_RATE: u32 = 48_000;
 /// Decoded spans kept mapped beyond the current clip set. Enough that
 /// undo/redo across a few edits never re-decodes; small enough that a long
 /// session cannot accumulate hundreds of mappings.
-const MEMORY_CACHE_CAP: usize = 64;
+const MEMORY_CACHE_CAP: usize = 16;
 
 /// Byte budget for `cache/audio` on disk. Stereo 16-bit 48k is ~11 MB a
 /// minute, so this keeps hours of decoded material before anything is
@@ -1504,14 +1504,66 @@ impl WavWriter {
     }
 }
 
-/// Owns the output stream for the life of the app, rebuilding it whenever
-/// it dies or the default device changes.
-///
-/// Setup failure is a retry with backoff, not a permanent return: a machine
-/// that boots Concat before its audio device is ready, or loses its only
-/// device mid-session, gets sound back when the device does. A rebuilt
-/// stream is seeded from the shared clock and the last clip set, so playback
-/// carries straight on.
+/// Ensures ALSA's `default` PCM routes through PipeWire when PipeWire is running
+/// on Linux without system-wide `pipewire-alsa` (`99-pipewire-default.conf`),
+/// preventing `cpal` from opening `hw:0` exclusively and dropping system audio
+/// into "Dummy Output". Returns `true` when PipeWire or PulseAudio is active.
+pub(crate) fn ensure_linux_sound_server_alsa() -> bool {
+    #[cfg(target_os = "linux")]
+    {
+        static SOUND_SERVER: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+        *SOUND_SERVER.get_or_init(|| {
+            let runtime = std::env::var_os("XDG_RUNTIME_DIR").map(PathBuf::from);
+            let pipewire_up = runtime
+                .as_ref()
+                .is_some_and(|dir| dir.join("pipewire-0").exists());
+            let pulse_up = runtime
+                .as_ref()
+                .is_some_and(|dir| dir.join("pulse/native").exists());
+
+            if pipewire_up
+                && Path::new("/usr/lib/alsa-lib/libasound_module_pcm_pipewire.so").is_file()
+            {
+                let home = std::env::var_os("HOME").map(PathBuf::from);
+                let xdg_conf = std::env::var_os("XDG_CONFIG_HOME")
+                    .map(PathBuf::from)
+                    .or_else(|| home.as_ref().map(|h| h.join(".config")));
+                let user_asoundrc = xdg_conf.as_ref().map(|c| c.join("alsa/asoundrc"));
+                let dot_asoundrc = home.as_ref().map(|h| h.join(".asoundrc"));
+
+                let already_configured =
+                    Path::new("/etc/alsa/conf.d/99-pipewire-default.conf").exists()
+                        || Path::new("/etc/alsa/conf.d/99-pulseaudio-default.conf").exists()
+                        || Path::new("/etc/asound.conf").exists()
+                        || dot_asoundrc.as_ref().is_some_and(|p| p.exists())
+                        || user_asoundrc.as_ref().is_some_and(|p| p.exists());
+
+                if !already_configured
+                    && let Some(target) = user_asoundrc
+                {
+                    if let Some(parent) = target.parent() {
+                        let _ = std::fs::create_dir_all(parent);
+                    }
+                    let conf = "pcm.!default {\n    type pipewire\n    playback_node \"-1\"\n    capture_node  \"-1\"\n    hint {\n        show on\n        description \"Default ALSA Output (currently PipeWire Media Server)\"\n    }\n}\n\nctl.!default {\n    type pipewire\n}\n";
+                    if std::fs::write(&target, conf).is_ok() {
+                        log::info!(
+                            "audio: configured {} so ALSA routes through PipeWire",
+                            target.display()
+                        );
+                    }
+                }
+            }
+            pipewire_up || pulse_up
+        })
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        false
+    }
+}
+
+/// Owns the output stream on demand while playing (with a 5-second idle hold
+/// after pause), rebuilding whenever it fails or the output device changes.
 fn supervise_stream(
     rx: mpsc::Receiver<Msg>,
     shared: Arc<Shared>,
@@ -1520,14 +1572,42 @@ fn supervise_stream(
 ) {
     use cpal::traits::{DeviceTrait, HostTrait};
 
-    // The callback drains this through a try-lock: uncontended in steady
-    // state (the supervisor only takes it between streams), and a missed
-    // drain on a contended tick is caught on the next callback.
     let rx = Arc::new(Mutex::new(rx));
     let mut backoff = std::time::Duration::from_secs(1);
     let mut reported_missing = false;
 
     loop {
+        // Sleep with zero open audio handles until playback is actually active.
+        while !shared.playing.load(Ordering::Relaxed) {
+            let msg = {
+                let Ok(receiver) = rx.lock() else {
+                    return;
+                };
+                receiver.recv()
+            };
+            match msg {
+                Ok(Msg::SetClips(next)) => *locked(&last_active) = next,
+                Ok(Msg::Play(_)) => break,
+                Ok(Msg::Pause | Msg::Seek(_)) => {}
+                Err(_) => return,
+            }
+        }
+
+        // Drain any pre-stream messages so `last_active` is fresh and no stale
+        // `Msg::Pause` from an earlier cycle sits ahead of the new stream.
+        if let Ok(receiver) = rx.try_lock() {
+            while let Ok(message) = receiver.try_recv() {
+                if let Msg::SetClips(next) = message {
+                    *locked(&last_active) = next;
+                }
+            }
+        }
+        if !shared.playing.load(Ordering::Relaxed) {
+            continue;
+        }
+
+        let sound_server = ensure_linux_sound_server_alsa();
+        shared.settle();
         let host = cpal::default_host();
         let built = host
             .default_output_device()
@@ -1541,21 +1621,15 @@ fn supervise_stream(
             Ok((stream, device_name)) => {
                 backoff = std::time::Duration::from_secs(1);
                 reported_missing = false;
-                // The stored position is brought up to where the wall has
-                // the clock before the stream's word is waited for, so the
-                // playhead does not start back where Play left it for the
-                // buffer it takes the stream to speak.
                 shared.settle();
                 shared.driven.store(true, Ordering::Relaxed);
 
-                // Watch for the two reasons to rebuild: the stream reported
-                // an error, or the default device is no longer the one the
-                // stream was built on (headphones unplugged, output switched
-                // in system settings).
                 let failed = stream.failed;
                 let _stream = stream.stream;
+                let mut idle_ticks: u32 = 0;
+                let mut poll_ticks: u32 = 0;
                 loop {
-                    std::thread::sleep(std::time::Duration::from_millis(1000));
+                    std::thread::sleep(std::time::Duration::from_millis(250));
                     if failed.load(Ordering::Relaxed) {
                         report(
                             events.as_ref(),
@@ -1563,26 +1637,31 @@ fn supervise_stream(
                         );
                         break;
                     }
-                    let current = cpal::default_host()
-                        .default_output_device()
-                        .and_then(|d| d.name().ok());
-                    if let Some(current) = current
-                        && current != device_name
-                    {
-                        // Informational only - switching outputs is a
-                        // normal act, not an error toast.
-                        log::info!("audio device changed to {current}; rebuilding");
-                        break;
+                    if shared.playing.load(Ordering::Relaxed) {
+                        idle_ticks = 0;
+                    } else {
+                        idle_ticks += 1;
+                        if idle_ticks >= 20 {
+                            break;
+                        }
+                    }
+                    poll_ticks = poll_ticks.wrapping_add(1);
+                    if !sound_server && poll_ticks % 4 == 0 {
+                        let current = cpal::default_host()
+                            .default_output_device()
+                            .and_then(|d| d.name().ok());
+                        if let Some(current) = current
+                            && current != device_name
+                        {
+                            log::info!("audio device changed to {current}; rebuilding");
+                            break;
+                        }
                     }
                 }
-                // The wall's time carries the clock until the next stream
-                // has it, from where this one left it.
                 shared.driven.store(false, Ordering::Relaxed);
-                // `_stream` drops here, releasing the device before rebuild.
+                // `_stream` drops here, releasing the audio device cleanly.
             }
             Err(error) => {
-                // Once, not every retry: a machine with no sound card would
-                // otherwise toast every backoff tick forever.
                 if !reported_missing {
                     report(
                         events.as_ref(),
@@ -1590,26 +1669,10 @@ fn supervise_stream(
                     );
                     reported_missing = true;
                 }
-                // No stream means no callback to drain the channel, and
-                // every message left in it pins the PCM it names. Fold them
-                // into the seed a rebuilt stream starts from instead, so
-                // the next stream picks up where the window is and the
-                // channel stays empty.
                 if let Ok(receiver) = rx.try_lock() {
                     while let Ok(message) = receiver.try_recv() {
-                        match message {
-                            Msg::SetClips(next) => *locked(&last_active) = next,
-                            // Play and a seek landed the clock themselves
-                            // when they were asked for. These are read
-                            // here a backoff later, up to half a minute,
-                            // and the clock has been running on the wall
-                            // since: landing it again would throw the
-                            // playhead back to where it started.
-                            Msg::Play(_) => {}
-                            // The window stopped the clock and landed it
-                            // itself, in `pause`; the message is only the
-                            // stream's to act on.
-                            Msg::Pause | Msg::Seek(_) => {}
+                        if let Msg::SetClips(next) = message {
+                            *locked(&last_active) = next;
                         }
                     }
                 }

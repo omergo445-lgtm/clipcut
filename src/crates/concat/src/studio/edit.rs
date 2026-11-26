@@ -70,11 +70,31 @@ impl Studio {
         self.confirm = Some(Confirm::RemoveTrack { track_id });
     }
 
+    pub fn request_remove_timeline(&mut self, index: i32) {
+        let Some(timeline) = self.project().timelines.get(index.max(0) as usize) else {
+            return;
+        };
+        if self.project().timelines.len() <= 1 {
+            return;
+        }
+        let id = timeline.id.clone();
+        if timeline.clips.is_empty() {
+            self.selection.clear();
+            self.apply(Command::RemoveTimeline { timeline_id: id });
+        } else {
+            self.confirm = Some(Confirm::RemoveTimeline { timeline_id: id });
+        }
+    }
+
     /// The confirmation sheet's answer: go ahead with what it asked about.
     pub fn confirm_accepted(&mut self) {
         match self.confirm.take() {
             Some(Confirm::RemoveTrack { track_id }) => {
                 self.apply(Command::RemoveTrack { track_id });
+            }
+            Some(Confirm::RemoveTimeline { timeline_id }) => {
+                self.selection.clear();
+                self.apply(Command::RemoveTimeline { timeline_id });
             }
             Some(Confirm::ReplaceExport { .. }) => {
                 self.handle(crate::panes::Msg::Export(
@@ -128,6 +148,25 @@ impl Studio {
                 crate::ui::ConfirmData {
                     open: true,
                     title: t("timeline.deleteTrackTitle").into(),
+                    message: message.into(),
+                    action: t("common.delete").into(),
+                    ..Default::default()
+                }
+            }
+            Confirm::RemoveTimeline { timeline_id } => {
+                let clips = self
+                    .project()
+                    .timelines
+                    .iter()
+                    .find(|tl| &tl.id == timeline_id)
+                    .map_or(0, |tl| tl.clips.len());
+                let message = match clips {
+                    1 => t("timeline.deleteTimelineOneClip"),
+                    many => tf("timeline.deleteTimelineClips", &[&many]),
+                };
+                crate::ui::ConfirmData {
+                    open: true,
+                    title: t("timeline.deleteTimelineTitle").into(),
                     message: message.into(),
                     action: t("common.delete").into(),
                     ..Default::default()

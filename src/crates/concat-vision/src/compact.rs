@@ -473,7 +473,7 @@ mod tests {
         bases
             .iter()
             .flat_map(|base| {
-                ["app.concat.editor", "org.standalones.concat"].map(|id| {
+                ["app.clipcut.editor", "app.concat.editor", "org.standalones.concat"].map(|id| {
                     base.join(id)
                         .join("cutout-models")
                         .join("realesr-general-x4v3.onnx")

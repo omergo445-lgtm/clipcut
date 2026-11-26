@@ -182,7 +182,7 @@ pub(crate) fn closing(how: &str) {
 pub fn report_startup_failure(error: &slint::PlatformError) {
     let error = error.to_string();
     // "could not start" right after the topic: the smoke scripts look for it.
-    log::error!("start: could not start the window: {error}; Concat says so in a dialog and quits");
+    log::error!("start: could not start the window: {error}; ClipCut says so in a dialog and quits");
     platform::report_startup_failure(&error);
 }
 
@@ -426,7 +426,7 @@ fn start(project: Option<std::path::PathBuf>, smoke: Smoke) -> Result<(), slint:
                     terminating.set(true);
                     if let Err(error) = studio.close_project() {
                         log::error!(
-                            "close: saving {} before quitting failed: {error}; Concat quits without it",
+                            "close: saving {} before quitting failed: {error}; ClipCut quits without it",
                             studio.project_name
                         );
                     }
@@ -502,8 +502,46 @@ fn start(project: Option<std::path::PathBuf>, smoke: Smoke) -> Result<(), slint:
     }
     studio.reload_packages(false);
     studio.watch_packages();
-    let dark = studio.prefs.dark.unwrap_or(true);
-    app.global::<Theme>().set_dark(dark);
+    {
+        let theme = app.global::<Theme>();
+        let saved_gutter = studio.prefs.gutter_style.unwrap_or(2).clamp(0, 3);
+        dock::set_gutter_style(saved_gutter);
+        theme.set_gutter_style(saved_gutter);
+        theme.set_corner_style(studio.prefs.corner_style.unwrap_or(2).clamp(0, 3));
+        theme.set_density(studio.prefs.ui_density.unwrap_or(1).clamp(0, 2));
+        theme.set_font_choice(studio.prefs.font_choice.unwrap_or(1).clamp(0, 3));
+        theme.set_panel_borders(studio.prefs.panel_borders);
+
+        let (mode, dark) = match studio.prefs.surface_mode {
+            Some(5) => {
+                if let Some(colour) = studio
+                    .prefs
+                    .surface_custom
+                    .as_deref()
+                    .and_then(format::parse_colour)
+                {
+                    theme.set_surface_custom(colour);
+                    let luma = (0.299 * f32::from(colour.red())
+                        + 0.587 * f32::from(colour.green())
+                        + 0.114 * f32::from(colour.blue()))
+                        / 255.0;
+                    (5, luma < 0.55)
+                } else {
+                    (0, true)
+                }
+            }
+            Some(m) => {
+                let m = m.clamp(0, 4);
+                (m, m != 4)
+            }
+            None => {
+                let is_dark = studio.prefs.dark.unwrap_or(true);
+                (if is_dark { 0 } else { 4 }, is_dark)
+            }
+        };
+        theme.set_surface_mode(mode);
+        theme.set_dark(dark);
+    }
     motion_tiles::install(&app);
     // Windows puts a dialog's OK before its Cancel; macOS and Linux after.
     app.global::<Theme>().set_ok_first(cfg!(windows));
@@ -556,10 +594,6 @@ fn start(project: Option<std::path::PathBuf>, smoke: Smoke) -> Result<(), slint:
             }
         }
     }
-    // The interface scale: the row on Settings > Appearance reads the index
-    // off the Theme global, and the window was already made at the scale the
-    // environment asked for above, so this only lines the two up.
-    // https://github.com/jub0t/Concat/issues/320
     app.global::<Theme>()
         .set_ui_scale(studio.prefs.scale_index() as i32);
 
@@ -1072,6 +1106,13 @@ fn start(project: Option<std::path::PathBuf>, smoke: Smoke) -> Result<(), slint:
     editor.on_dock_add(on_dock!(|state, kind: PaneKind| {
         add_pane(&mut state, kind);
     }));
+    editor.on_dock_preset(on_dock!(|state, preset: i32| {
+        if state.compact {
+            state.dock_aside = dock::preset_dock(preset);
+        } else {
+            state.dock = dock::preset_dock(preset);
+        }
+    }));
     // Not on a phone or in the compact dock: there the two seats are the
     // monitor and the timeline, and a third would squeeze both.
     editor.on_key_mark_opened(on_dock!(|state| {
@@ -1296,16 +1337,7 @@ fn start(project: Option<std::path::PathBuf>, smoke: Smoke) -> Result<(), slint:
         }
     }));
     editor.on_tab_close_requested(on_window!(|state, index: i32| {
-        let Some(id) = state
-            .project()
-            .timelines
-            .get(index.max(0) as usize)
-            .map(|timeline| timeline.id.clone())
-        else {
-            return;
-        };
-        state.selection.clear();
-        state.apply(concat_project::Command::RemoveTimeline { timeline_id: id });
+        state.request_remove_timeline(index);
     }));
 
     // ── the tray ──
@@ -2258,12 +2290,169 @@ fn start(project: Option<std::path::PathBuf>, smoke: Smoke) -> Result<(), slint:
     // tree is a binding away from it; it is also remembered.
     app.on_settings_theme_changed({
         move |dark| {
+            let mode = if dark { 0 } else { 4 };
             log::info!("settings: Theme {}", if dark { "Dark" } else { "Light" });
             Shell::with(|shell, app| {
-                app.global::<Theme>().set_dark(dark);
+                let theme = app.global::<Theme>();
+                theme.set_surface_mode(mode);
+                theme.set_dark(dark);
                 let mut studio = shell.studio.borrow_mut();
                 studio.prefs.dark = Some(dark);
+                studio.prefs.surface_mode = Some(mode);
                 studio.prefs.save(&studio.host.dirs);
+            });
+        }
+    });
+    app.on_settings_surface_mode_changed({
+        move |mode| {
+            let mode = mode.clamp(0, 4);
+            let dark = mode != 4;
+            log::info!("settings: Surface mode {mode}");
+            Shell::with(|shell, app| {
+                let theme = app.global::<Theme>();
+                theme.set_surface_mode(mode);
+                theme.set_dark(dark);
+                let mut studio = shell.studio.borrow_mut();
+                studio.prefs.surface_mode = Some(mode);
+                studio.prefs.dark = Some(dark);
+                studio.prefs.save(&studio.host.dirs);
+            });
+        }
+    });
+    app.on_settings_surface_custom_changed({
+        move |colour| {
+            let luma = (0.299 * f32::from(colour.red())
+                + 0.587 * f32::from(colour.green())
+                + 0.114 * f32::from(colour.blue()))
+                / 255.0;
+            let dark = luma < 0.55;
+            Shell::with(|shell, app| {
+                let theme = app.global::<Theme>();
+                theme.set_surface_custom(colour);
+                theme.set_surface_mode(5);
+                theme.set_dark(dark);
+                let mut studio = shell.studio.borrow_mut();
+                studio.prefs.surface_mode = Some(5);
+                studio.prefs.surface_custom = Some(format::hex_of(colour));
+                studio.prefs.dark = Some(dark);
+                studio.prefs.save(&studio.host.dirs);
+            });
+        }
+    });
+    app.on_settings_corner_style_changed({
+        move |style| {
+            let style = style.clamp(0, 3);
+            log::info!("settings: Corner style {style}");
+            Shell::with(|shell, app| {
+                app.global::<Theme>().set_corner_style(style);
+                let mut studio = shell.studio.borrow_mut();
+                studio.prefs.corner_style = Some(style);
+                studio.prefs.save(&studio.host.dirs);
+            });
+        }
+    });
+    app.on_settings_density_changed({
+        move |density| {
+            let density = density.clamp(0, 2);
+            log::info!("settings: UI density {density}");
+            Shell::with(|shell, app| {
+                app.global::<Theme>().set_density(density);
+                let mut studio = shell.studio.borrow_mut();
+                studio.prefs.ui_density = Some(density);
+                studio.prefs.save(&studio.host.dirs);
+            });
+        }
+    });
+    app.on_settings_font_choice_changed({
+        move |choice| {
+            let choice = choice.clamp(0, 3);
+            log::info!("settings: Text size {choice}");
+            Shell::with(|shell, app| {
+                app.global::<Theme>().set_font_choice(choice);
+                let mut studio = shell.studio.borrow_mut();
+                studio.prefs.font_choice = Some(choice);
+                studio.prefs.save(&studio.host.dirs);
+            });
+        }
+    });
+    app.on_settings_gutter_style_changed({
+        move |style| {
+            let style = style.clamp(0, 3);
+            log::info!("settings: Gutter style {style}");
+            dock::set_gutter_style(style);
+            Shell::with(|shell, app| {
+                app.global::<Theme>().set_gutter_style(style);
+                {
+                    let mut studio = shell.studio.borrow_mut();
+                    studio.prefs.gutter_style = Some(style);
+                    studio.prefs.save(&studio.host.dirs);
+                }
+                shell.studio.borrow().publish(&app, &shell.models);
+            });
+        }
+    });
+    app.on_settings_panel_borders_changed({
+        move |on| {
+            log::info!("settings: Panel outlines {on}");
+            Shell::with(|shell, app| {
+                app.global::<Theme>().set_panel_borders(on);
+                let mut studio = shell.studio.borrow_mut();
+                studio.prefs.panel_borders = on;
+                studio.prefs.save(&studio.host.dirs);
+            });
+        }
+    });
+    app.on_settings_layout_preset_chosen({
+        move |preset| {
+            log::info!("settings: Workspace layout preset {preset}");
+            Shell::with(|shell, app| {
+                {
+                    let mut state = shell.studio.borrow_mut();
+                    if state.compact {
+                        state.dock_aside = dock::preset_dock(preset);
+                    } else {
+                        state.dock = dock::preset_dock(preset);
+                    }
+                    state.save_layout(slint::ComponentHandle::window(&app));
+                }
+                shell.studio.borrow().publish(&app, &shell.models);
+            });
+        }
+    });
+    app.on_settings_appearance_reset({
+        move || {
+            log::info!("settings: Appearance reset to defaults");
+            dock::set_gutter_style(2);
+            Shell::with(|shell, app| {
+                let theme = app.global::<Theme>();
+                theme.set_surface_mode(0);
+                theme.set_dark(true);
+                theme.set_accent_choice(0);
+                theme.set_playhead_choice(0);
+                theme.set_corner_style(2);
+                theme.set_density(1);
+                theme.set_font_choice(1);
+                theme.set_gutter_style(2);
+                theme.set_panel_borders(false);
+                theme.set_ui_scale(0);
+                {
+                    let mut studio = shell.studio.borrow_mut();
+                    studio.prefs.dark = None;
+                    studio.prefs.surface_mode = None;
+                    studio.prefs.surface_custom = None;
+                    studio.prefs.accent = None;
+                    studio.prefs.playhead = None;
+                    studio.prefs.corner_style = None;
+                    studio.prefs.ui_density = None;
+                    studio.prefs.font_choice = None;
+                    studio.prefs.gutter_style = None;
+                    studio.prefs.panel_borders = false;
+                    studio.prefs.ui_scale = None;
+                    studio.prefs.save(&studio.host.dirs);
+                }
+                platform::set_ui_scale(None);
+                platform::apply_ui_scale(app.window());
+                shell.studio.borrow().publish(&app, &shell.models);
             });
         }
     });
@@ -3116,7 +3305,7 @@ fn start(project: Option<std::path::PathBuf>, smoke: Smoke) -> Result<(), slint:
     // anything else can end the process, and the exit says it failed.
     if let Err(error) = &result {
         log::error!(
-            "close: the window could not run: {error}; Concat quits, and the next launch starts safe"
+            "close: the window could not run: {error}; ClipCut quits, and the next launch starts safe"
         );
         // The mark stays: the next launch starts safe.
         if let Some(watch) = &startup_mark {
@@ -3243,7 +3432,7 @@ fn stop_exports() {
         log::debug!("close: stopping the API's server");
         let (stopped, wait) = std::sync::mpsc::channel();
         let _ = std::thread::Builder::new()
-            .name("concat server stop".to_owned())
+            .name("clipcut server stop".to_owned())
             .spawn(move || {
                 server.stop();
                 let _ = stopped.send(());
@@ -3256,7 +3445,7 @@ fn stop_exports() {
     }
     if exporter.is_busy() {
         log::warn!(
-            "close: wanted the export stopped before quitting, but it ran on past {}; Concat quits anyway",
+            "close: wanted the export stopped before quitting, but it ran on past {}; ClipCut quits anyway",
             concat_log::span(EXPORT_PATIENCE)
         );
     }
@@ -3328,11 +3517,11 @@ fn safe_start() -> (Option<concat_host::jobs::Tripwire>, bool) {
             }
         }
         // The setting does not record who turned it off: the switch in
-        // Settings, `--software`, or Concat 0.2.8, which turned it off for
-        // good after any start that failed. So the line says all three.
+        // Settings, `--software`, or an earlier build after a start that
+        // failed. So the line says all three.
         Err(_) if preferences.software_gpu => {
             log::info!(
-                "start: {how} · the setting that draws on the GPU is off (turned off in Settings, by --software, or by Concat 0.2.8 after a start that failed)"
+                "start: {how} · the setting that draws on the GPU is off (turned off in Settings, by --software, or after a start that failed)"
             );
         }
         // The launch that set it has said so in `settle_start` already.

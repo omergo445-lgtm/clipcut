@@ -193,7 +193,7 @@ export component App inherits Window {
     // The taskbar's and Alt-Tab's picture on Windows, and the window
     // list's on X11. A Mac takes its Dock icon from the bundle and ignores
     // this; the .exe's own, for Explorer, is embedded by build.rs.
-    icon: @image-url("../../../../assets/icons/concat_logo_256.png");
+    icon: @image-url("../../../../assets/icons/clipcut_logo_256.png");
     // Where the strip carries its own window buttons the platform's
     // decorations are not wanted, and this is the property Slint keeps
     // them off with: the winit backend re-applies `no-frame` to the
@@ -402,6 +402,15 @@ export component App inherits Window {
     callback settings-playhead-changed(colour: color);
     callback settings-playhead-chosen(index: int);
     callback settings-scale-changed(index: int);
+    callback settings-surface-mode-changed(mode: int);
+    callback settings-surface-custom-changed(colour: color);
+    callback settings-corner-style-changed(style: int);
+    callback settings-density-changed(density: int);
+    callback settings-font-choice-changed(choice: int);
+    callback settings-gutter-style-changed(style: int);
+    callback settings-panel-borders-changed(on: bool);
+    callback settings-layout-preset-chosen(preset: int);
+    callback settings-appearance-reset();
     callback settings-playhead-stops-changed(on: bool);
     callback settings-proxies-changed(on: bool);
     callback settings-remember-layout-changed(on: bool);
@@ -773,6 +782,7 @@ export component App inherits Window {
                 close => { root.titlebar-close(); }
                 open-settings => { root.open-settings(); }
                 add-pane(kind) => { Editor.dock-add(kind); }
+                dock-preset(preset) => { Editor.dock-preset(preset); }
                 export-clicked => { root.export-clicked(); }
             }
 
@@ -1047,6 +1057,15 @@ export component App inherits Window {
         language-changed(index) => { root.settings-language-changed(index); }
         log-level-changed(index) => { root.settings-log-level-changed(index); }
         theme-changed(dark) => { root.settings-theme-changed(dark); }
+        surface-mode-changed(mode) => { root.settings-surface-mode-changed(mode); }
+        surface-custom-changed(colour) => { root.settings-surface-custom-changed(colour); }
+        corner-style-changed(style) => { root.settings-corner-style-changed(style); }
+        density-changed(density) => { root.settings-density-changed(density); }
+        font-choice-changed(choice) => { root.settings-font-choice-changed(choice); }
+        gutter-style-changed(style) => { root.settings-gutter-style-changed(style); }
+        panel-borders-changed(on) => { root.settings-panel-borders-changed(on); }
+        layout-preset-chosen(preset) => { root.settings-layout-preset-chosen(preset); }
+        appearance-reset => { root.settings-appearance-reset(); }
         accent-changed(index) => { root.settings-accent-changed(index); }
         accent-custom-changed(colour) => { root.settings-accent-custom-changed(colour); }
         playhead-changed(colour) => { root.settings-playhead-changed(colour); }
