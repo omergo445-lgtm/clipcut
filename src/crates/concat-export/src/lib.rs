@@ -1189,9 +1189,9 @@ pub fn render_on(
     // takes the AAC an MP4 does.
     let container = request.codec.container();
     let sound_container = if container == "webm" { "webm" } else { "m4a" };
-    let silent = directory.join(format!(".{stem}.concat-video.{container}"));
-    let mixed = directory.join(format!(".{stem}.concat-audio.{sound_container}"));
-    let muxed = directory.join(format!(".{stem}.concat-muxed.{container}"));
+    let silent = directory.join(format!(".{stem}.clipcut-video.{container}"));
+    let mixed = directory.join(format!(".{stem}.clipcut-audio.{sound_container}"));
+    let muxed = directory.join(format!(".{stem}.clipcut-muxed.{container}"));
 
     // The export's one line, written when it ends however it ends: done,
     // cancelled or failed, with where its time went (see `Spent`). It is

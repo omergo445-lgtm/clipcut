@@ -221,23 +221,39 @@ impl VideoCodec {
                 "h264_qsv",
                 "h264_amf",
                 "h264_mf",
+                "libx264",
                 "libopenh264",
             ],
-            VideoCodec::H264 if windows => &["h264_mf", "libopenh264"],
-            VideoCodec::H264 if hardware => &["h264_nvenc", "h264_qsv", "h264_amf", "libopenh264"],
-            VideoCodec::H264 => &["libopenh264"],
+            VideoCodec::H264 if windows => &["h264_mf", "libx264", "libopenh264"],
+            VideoCodec::H264 if hardware => &[
+                "h264_nvenc",
+                "h264_qsv",
+                "h264_amf",
+                "libx264",
+                "libopenh264",
+            ],
+            VideoCodec::H264 => &["libx264", "libopenh264"],
             VideoCodec::Hevc if macos => &["hevc_videotoolbox"],
-            // Kvazaar last: the CPU's HEVC where no chip and no Media
+            // libx265 / Kvazaar last: the CPU's HEVC where no chip and no Media
             // Foundation encoder takes it, and where a chip that stalled
             // part way through hands the export on.
-            VideoCodec::Hevc if windows => &[
+            VideoCodec::Hevc if hardware && windows => &[
                 "hevc_nvenc",
                 "hevc_qsv",
                 "hevc_amf",
                 "hevc_mf",
+                "libx265",
                 "libkvazaar",
             ],
-            VideoCodec::Hevc => &["hevc_nvenc", "hevc_qsv", "hevc_amf", "libkvazaar"],
+            VideoCodec::Hevc if windows => &["hevc_mf", "libx265", "libkvazaar"],
+            VideoCodec::Hevc if hardware => &[
+                "hevc_nvenc",
+                "hevc_qsv",
+                "hevc_amf",
+                "libx265",
+                "libkvazaar",
+            ],
+            VideoCodec::Hevc => &["libx265", "libkvazaar"],
             VideoCodec::Av1 if macos => &["libsvtav1", "libaom-av1"],
             VideoCodec::Av1 if hardware => {
                 &["av1_nvenc", "av1_qsv", "av1_amf", "libsvtav1", "libaom-av1"]
@@ -1203,6 +1219,23 @@ fn open_video(
     // holding the target.
     let bufsize = format!("{}k", options.bitrate_kbps);
     let settings = match encoder_name {
+        "libx264" | "libx265" if cbr => ffmpeg::dict! {
+            "preset" => kvazaar_preset(&options.preset),
+            "b" => bitrate.as_str(),
+            "minrate" => bitrate.as_str(),
+            "maxrate" => bitrate.as_str(),
+            "bufsize" => bufsize.as_str(),
+        },
+        "libx264" | "libx265" if average => ffmpeg::dict! {
+            "preset" => kvazaar_preset(&options.preset),
+            "b" => bitrate.as_str(),
+            "maxrate" => peak.as_str(),
+            "bufsize" => window.as_str(),
+        },
+        "libx264" | "libx265" => ffmpeg::dict! {
+            "preset" => kvazaar_preset(&options.preset),
+            "crf" => &options.crf.min(51).to_string(),
+        },
         // Kvazaar, steered by the bitrate on the context (above). Its own
         // preset names match x264's, and "medium" is its default; the
         // export's preset is passed on as it is for the other CPU encoders.
