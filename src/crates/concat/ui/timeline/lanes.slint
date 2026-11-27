@@ -7,6 +7,7 @@ import { Fmt, Payload } from "../util.slint";
 import { Glyph, Icon } from "../icons.slint";
 import { ClipData, ClipKind, DropData, TimelineTool, TrackData } from "model.slint";
 import { ContextMenu, MenuItemData } from "../primitives/context-menu.slint";
+import { Editor } from "../editor.slint";
 
 // The lanes: the ruler, the banded track stack, the clips on it, the playhead
 // and the two band gestures.
@@ -28,6 +29,16 @@ import { ContextMenu, MenuItemData } from "../primitives/context-menu.slint";
 // has to be painted as the clip it is about to become — and a ghost that is
 // the wrong colour is worse than no ghost.
 global Paint {
+    public pure function tag-mark(tag: int, fallback: color) -> color {
+        return tag == 1 ? #ef4444
+            : tag == 2 ? #f97316
+            : tag == 3 ? #eab308
+            : tag == 4 ? #10b981
+            : tag == 5 ? #06b6d4
+            : tag == 6 ? #8b5cf6
+            : tag == 7 ? #ec4899
+            : fallback;
+    }
     public pure function mark(kind: ClipKind) -> color {
         return kind == ClipKind.audio ? Theme.kind-audio
             : kind == ClipKind.image ? Theme.kind-image
@@ -191,7 +202,7 @@ component Clip inherits Rectangle {
     callback hovered(x: length);
     callback hover-ended();
 
-    property <color> mark: Paint.mark(root.item.kind);
+    property <color> mark: Paint.tag-mark(root.item.tag-color, Paint.mark(root.item.kind));
     property <color> well: Paint.well(root.item.kind);
     property <Glyph> badge: Paint.badge(root.item.kind);
 
@@ -2072,6 +2083,82 @@ export component Lanes inherits Rectangle {
                         root.scrubbed(Math.max(0, root.seconds-at(self.mouse-x)));
                     }
                 }
+            }
+
+            // ── In / Out Loop Range bar on the ruler ─────────────────────
+            if Editor.loop-in >= 0 && Editor.loop-out > Editor.loop-in: Rectangle {
+                property <length> x0: root.at(Editor.loop-in);
+                property <length> x1: root.at(Editor.loop-out);
+                x: self.x0;
+                y: 0;
+                width: Math.max(2px, self.x1 - self.x0);
+                height: parent.height - 1px;
+                background: Editor.loop-active ? Theme.accent.with-alpha(0.24) : Theme.fg-dim.with-alpha(0.14);
+                visible: self.x + self.width > 0px && self.x < parent.width;
+
+                // Top highlight bar
+                Rectangle {
+                    x: 0;
+                    y: 0;
+                    width: parent.width;
+                    height: 2px;
+                    background: Editor.loop-active ? Theme.accent : Theme.fg-muted;
+                }
+                // Left [In] bracket
+                Rectangle {
+                    x: 0;
+                    y: 0;
+                    width: 2px;
+                    height: parent.height;
+                    background: Editor.loop-active ? Theme.accent : Theme.fg-muted;
+                }
+                // Right [Out] bracket
+                Rectangle {
+                    x: parent.width - 2px;
+                    y: 0;
+                    width: 2px;
+                    height: parent.height;
+                    background: Editor.loop-active ? Theme.accent : Theme.fg-muted;
+                }
+            }
+        }
+
+        // ── Timeline Markers & Chapters on the ruler ─────────────────────
+        for marker-time[idx] in Editor.marker-times: Rectangle {
+            property <color> pin-color: Paint.tag-mark(Editor.marker-colors[idx], Theme.accent);
+            x: root.at(marker-time) - 4px;
+            y: 2px;
+            width: Math.max(10px, marker-lbl.preferred-width + 14px);
+            height: 15px;
+            border-radius: 3px;
+            background: self.pin-color.with-alpha(marker-touch.has-hover ? 0.95 : 0.85);
+            visible: self.x + self.width > 0px && self.x < root.width;
+
+            // Vertical pin down to ruler bottom
+            Rectangle {
+                x: 3.5px;
+                y: parent.height;
+                width: 1px;
+                height: root.ruler-height - 17px;
+                background: parent.pin-color;
+            }
+
+            marker-lbl := Text {
+                x: 6px;
+                y: 0;
+                height: parent.height;
+                text: Editor.marker-names[idx];
+                color: #0b0d11;
+                font-size: 9px;
+                font-weight: 700;
+                vertical-alignment: center;
+                max-width: 96px;
+                overflow: elide;
+            }
+
+            marker-touch := TouchArea {
+                mouse-cursor: pointer;
+                clicked => { root.scrubbed(marker-time); }
             }
         }
 

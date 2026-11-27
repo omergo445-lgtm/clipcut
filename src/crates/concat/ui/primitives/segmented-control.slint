@@ -102,7 +102,7 @@ export component SegmentedControl inherits Rectangle {
         border-width: root.tabs ? 0px : 1px;
         border-color: Theme.accent;
 
-        animate x, width { duration: 220ms; easing: cubic-bezier(0.16, 1, 0.3, 1); }
+        animate x, width { duration: Theme.anim-fast; easing: cubic-bezier(0.16, 1, 0.3, 1); }
     }
 
     for option[index] in root.options: Rectangle {

@@ -2258,6 +2258,20 @@ impl Studio {
                 &keymap::label(&self.prefs, "paste"),
                 !self.clipboard.is_empty(),
             ),
+            action(
+                "copy-attributes",
+                t("proTools.copyAttributes"),
+                Glyph::Copy,
+                &keymap::label(&self.prefs, "copy-attributes"),
+                true,
+            ),
+            action(
+                "paste-attributes",
+                t("proTools.pasteAttributes"),
+                Glyph::Sparkle,
+                &keymap::label(&self.prefs, "paste-attributes"),
+                self.copied_attributes.is_some() && !locked,
+            ),
             rule(),
             action(
                 "split",
@@ -2307,6 +2321,42 @@ impl Studio {
                 "",
                 !locked
                     && (clip.kind == model::ClipKind::Video || clip.kind == model::ClipKind::Image),
+            ),
+            rule(),
+            action(
+                "auto-cut-silence",
+                t("proTools.autoCutSilence"),
+                Glyph::Razor,
+                &keymap::label(&self.prefs, "auto-cut-silence"),
+                !locked && self.clip_has_sound(clip),
+            ),
+            action(
+                "quick-fades",
+                t("proTools.quickFades"),
+                Glyph::Sliders,
+                "",
+                !locked,
+            ),
+            action(
+                "crossfade-all",
+                t("proTools.crossfadeAllCuts"),
+                Glyph::Transition,
+                "",
+                !locked && clip.kind.is_visual(),
+            ),
+            action(
+                "close-gaps",
+                t("proTools.closeAllGaps"),
+                Glyph::Fold,
+                &keymap::label(&self.prefs, "close-gaps"),
+                !locked,
+            ),
+            action(
+                "select-forward",
+                t("proTools.selectTrackForward"),
+                Glyph::SkipForward,
+                &keymap::label(&self.prefs, "select-forward"),
+                !locked,
             ),
             rule(),
         ];

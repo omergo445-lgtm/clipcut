@@ -13,6 +13,7 @@ import { Pane, PaneHeader } from "pane.slint";
 import { PaneKind, PaneSwitcher } from "pane-switcher.slint";
 import { ClipKind, StageGuideData, StageItemData } from "../timeline/model.slint";
 import { ContextMenu, MenuMetrics, MenuRow } from "../primitives/context-menu.slint";
+import { Editor } from "../editor.slint";
 
 // The programme monitor: a header that says what the output is, a stage on a
 // sunken viewport, and a transport tray under it in three parts — timecode on
@@ -1075,6 +1076,89 @@ export component PreviewPane inherits Rectangle {
                     source: root.frame;
                     image-fit: contain;
                 }
+
+                // ── Preview Guides Overlay (Rule of Thirds, Crosshair, Safe Zones, 9:16 Shorts) ──
+                // Mode 1: Rule of Thirds (3x3 grid)
+                if Editor.preview-guides == 1: Rectangle {
+                    x: 0; y: 0; width: parent.width; height: parent.height;
+                    background: transparent;
+                    Rectangle { x: parent.width / 3; y: 0; width: 1px; height: parent.height; background: #ffffff77; }
+                    Rectangle { x: parent.width * 2 / 3; y: 0; width: 1px; height: parent.height; background: #ffffff77; }
+                    Rectangle { x: 0; y: parent.height / 3; width: parent.width; height: 1px; background: #ffffff77; }
+                    Rectangle { x: 0; y: parent.height * 2 / 3; width: parent.width; height: 1px; background: #ffffff77; }
+                }
+
+                // Mode 2: Center Crosshair
+                if Editor.preview-guides == 2: Rectangle {
+                    x: 0; y: 0; width: parent.width; height: parent.height;
+                    background: transparent;
+                    Rectangle { x: parent.width / 2; y: 0; width: 1px; height: parent.height; background: Theme.accent.with-alpha(0.65); }
+                    Rectangle { x: 0; y: parent.height / 2; width: parent.width; height: 1px; background: Theme.accent.with-alpha(0.65); }
+                    Rectangle {
+                        x: (parent.width - 24px) / 2;
+                        y: (parent.height - 24px) / 2;
+                        width: 24px;
+                        height: 24px;
+                        border-width: 1px;
+                        border-color: Theme.accent.with-alpha(0.85);
+                        border-radius: 12px;
+                    }
+                }
+
+                // Mode 3: Broadcast Action Safe (90%) & Title Safe (80%) Margins
+                if Editor.preview-guides == 3: Rectangle {
+                    x: 0; y: 0; width: parent.width; height: parent.height;
+                    background: transparent;
+                    // Action safe (90%)
+                    Rectangle {
+                        x: parent.width * 0.05;
+                        y: parent.height * 0.05;
+                        width: parent.width * 0.9;
+                        height: parent.height * 0.9;
+                        border-width: 1px;
+                        border-color: #ffffff88;
+                    }
+                    // Title safe (80%)
+                    Rectangle {
+                        x: parent.width * 0.1;
+                        y: parent.height * 0.1;
+                        width: parent.width * 0.8;
+                        height: parent.height * 0.8;
+                        border-width: 1px;
+                        border-color: Theme.accent.with-alpha(0.85);
+                    }
+                }
+
+                // Mode 4: 9:16 Vertical Shorts / Reels / TikTok Crop Guide
+                if Editor.preview-guides == 4: Rectangle {
+                    x: 0; y: 0; width: parent.width; height: parent.height;
+                    background: transparent;
+                    property <length> crop-w: Math.min(parent.width, parent.height * 9 / 16);
+                    property <length> side-w: Math.max(0px, (parent.width - self.crop-w) / 2);
+
+                    // Left darkened pillar
+                    Rectangle {
+                        x: 0; y: 0;
+                        width: parent.side-w;
+                        height: parent.height;
+                        background: #00000088;
+                    }
+                    // Right darkened pillar
+                    Rectangle {
+                        x: parent.width - parent.side-w; y: 0;
+                        width: parent.side-w;
+                        height: parent.height;
+                        background: #00000088;
+                    }
+                    // Glowing 9:16 center frame
+                    Rectangle {
+                        x: parent.side-w; y: 0;
+                        width: parent.crop-w;
+                        height: parent.height;
+                        border-width: 1.5px;
+                        border-color: Theme.accent;
+                    }
+                }
             }
 
             // The selection, over the stage and the same size as it. A
@@ -1329,6 +1413,31 @@ export component PreviewPane inherits Rectangle {
                             names: root.ratio-names;
                             current: root.ratio-index;
                             changed(index) => { root.ratio-changed(index); }
+                        }
+                    }
+
+                    // Preview Safe Zones, Rule-of-Thirds & 9:16 Vertical Crop Guides
+                    VerticalLayout {
+                        alignment: center;
+                        Select {
+                            snug: true;
+                            width: self.natural-width;
+                            current: Editor.preview-guides;
+                            options: [
+                                I18n.t("proTools.guidesOff"),
+                                I18n.t("proTools.guidesThirds"),
+                                I18n.t("proTools.guidesCrosshair"),
+                                I18n.t("proTools.guidesSafeZones"),
+                                I18n.t("proTools.guidesShorts"),
+                            ];
+                            details: ["", "3×3", "+", "80/90%", "9:16"];
+                            changed(index) => {
+                                if (index == 0) { Editor.pro-tool("guides-0"); }
+                                else if (index == 1) { Editor.pro-tool("guides-1"); }
+                                else if (index == 2) { Editor.pro-tool("guides-2"); }
+                                else if (index == 3) { Editor.pro-tool("guides-3"); }
+                                else { Editor.pro-tool("guides-4"); }
+                            }
                         }
                     }
 

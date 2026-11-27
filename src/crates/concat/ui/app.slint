@@ -409,6 +409,8 @@ export component App inherits Window {
     callback settings-font-choice-changed(choice: int);
     callback settings-gutter-style-changed(style: int);
     callback settings-panel-borders-changed(on: bool);
+    callback settings-motion-mode-changed(mode: int);
+    callback settings-turbo-preview-changed(on: bool);
     callback settings-layout-preset-chosen(preset: int);
     callback settings-appearance-reset();
     callback settings-playhead-stops-changed(on: bool);
@@ -1064,6 +1066,8 @@ export component App inherits Window {
         font-choice-changed(choice) => { root.settings-font-choice-changed(choice); }
         gutter-style-changed(style) => { root.settings-gutter-style-changed(style); }
         panel-borders-changed(on) => { root.settings-panel-borders-changed(on); }
+        motion-mode-changed(mode) => { root.settings-motion-mode-changed(mode); }
+        turbo-preview-changed(on) => { root.settings-turbo-preview-changed(on); }
         layout-preset-chosen(preset) => { root.settings-layout-preset-chosen(preset); }
         appearance-reset => { root.settings-appearance-reset(); }
         accent-changed(index) => { root.settings-accent-changed(index); }

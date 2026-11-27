@@ -593,4 +593,17 @@ export global Editor {
     in-out property <string> keys-delete-right;
     in-out property <string> keys-pan;
     in-out property <string> keys-preview-axis;
+
+    // ── Creator All-Rounder Pro Tools ──
+    in-out property <[float]> marker-times;
+    in-out property <[string]> marker-names;
+    in-out property <[int]> marker-colors;
+    in-out property <float> loop-in: -1;
+    in-out property <float> loop-out: -1;
+    in-out property <bool> loop-active: false;
+    in-out property <int> preview-guides: 0;
+    in-out property <bool> has-copied-attributes: false;
+    in-out property <string> chapters-clipboard;
+    in-out property <int> chapters-clipboard-token;
+    callback pro-tool(action: string);
 }

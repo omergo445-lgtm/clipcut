@@ -47,6 +47,7 @@ pub struct WGPUSurface {
     surface_config: RefCell<Option<wgpu::SurfaceConfiguration>>,
     surface: Option<wgpu::Surface<'static>>,
     textures_to_transition_for_sampling: RefCell<Vec<wgpu::Texture>>,
+    backing_surface: RefCell<Option<(PhysicalWindowSize, skia_safe::Surface)>>,
     pub(crate) backend: Backend,
     alpha_modes: Vec<wgpu::CompositeAlphaMode>,
 }
@@ -97,10 +98,6 @@ impl WGPUSurface {
             .unwrap_or_else(|| swapchain_capabilities.formats[0]);
         surface_config.format = swapchain_format;
 
-        // Prefer FIFO modes over the Mailbox that `get_default_config` picks on some backends
-        // (it takes the first advertised mode, and DX12 lists Mailbox first), for frame pacing
-        // and better energy efficiency. `AutoVsync` falls back to FifoRelaxed and then Fifo, so
-        // it is supported everywhere.
         surface_config.present_mode = wgpu::PresentMode::AutoVsync;
 
         let error_scope = device.push_error_scope(wgpu::ErrorFilter::Validation);
@@ -111,9 +108,12 @@ impl WGPUSurface {
 
         let backend = Backend::new(adapter, device)?;
 
-        let gr_context = backend
+        let mut gr_context = backend
             .make_context(adapter, device, queue)
             .ok_or_else(|| PlatformError::from("Failed to create Skia context from WGPU"))?;
+        // Cap Skia's internal GPU resource cache to 48 MB so low-VRAM GPUs (512 MB GT 650M)
+        // never thrash or exhaust device memory.
+        gr_context.set_resource_cache_limit(48 * 1024 * 1024);
 
         Ok(Self {
             gr_context: gr_context.into(),
@@ -121,6 +121,7 @@ impl WGPUSurface {
             surface_config: Some(surface_config).into(),
             surface: Some(surface),
             textures_to_transition_for_sampling: RefCell::new(Vec::new()),
+            backing_surface: RefCell::new(None),
             backend,
             alpha_modes: swapchain_capabilities.alpha_modes,
         })
@@ -132,14 +133,16 @@ impl WGPUSurface {
         device: wgpu::Device,
         queue: wgpu::Queue,
         backend: Backend,
-        gr_context: skia_safe::gpu::DirectContext,
+        mut gr_context: skia_safe::gpu::DirectContext,
     ) -> Self {
+        gr_context.set_resource_cache_limit(48 * 1024 * 1024);
         Self {
             gr_context: RefCell::new(gr_context),
             wgpu: Rc::new(SharedWgpuState { instance, adapter, device, queue }),
             surface_config: None.into(),
             surface: None,
             textures_to_transition_for_sampling: RefCell::new(Vec::new()),
+            backing_surface: RefCell::new(None),
             backend,
             alpha_modes: vec![],
         }
@@ -171,15 +174,6 @@ impl WGPUSurface {
 }
 
 /// The wgpu stack a surface renders with.
-///
-/// [`SkiaSharedContext`] caches the one the first window created, so that later windows it can
-/// serve reuse it instead of creating their own.
-/// That cache holds a weak reference and every surface a strong one, so the resources go away
-/// with the last surface using them.
-/// Were they to outlive the surfaces, they'd be destroyed whenever the last renderer happens to
-/// be dropped, and tearing a wgpu device down from a thread-local destructor aborts the process
-/// on macOS, where the Metal backend needs an autorelease pool that is gone by then.
-/// A window that is still shown owns its surface, so that case remains.
 pub(crate) struct SharedWgpuState {
     instance: wgpu::Instance,
     adapter: wgpu::Adapter,
@@ -187,10 +181,6 @@ pub(crate) struct SharedWgpuState {
     queue: wgpu::Queue,
 }
 
-/// Whether `device` offers everything `settings` asks of it.
-///
-/// The instance and adapter parts of the settings are covered by
-/// [`adapter_matches_graphics_api_request`].
 #[cfg(feature = "unstable-wgpu-30")]
 fn device_satisfies_settings(
     device: &wgpu::Device,
@@ -261,8 +251,6 @@ impl crate::Surface for WGPUSurface {
             _ => None,
         };
 
-        // try to reuse old / shared graphics primitives from previous windows with matching
-        // settings
         if !manual_configuration {
             let shared_state = shared_context.0.wgpu_30_state.borrow().upgrade();
             if let Some(shared) = shared_state {
@@ -283,7 +271,6 @@ impl crate::Surface for WGPUSurface {
                     match Self::init_with_parts(shared, surface, size) {
                         Ok(surface) => return Ok(surface),
                         Err(err) => {
-                            // The shared device may be lost. Drop it and start over.
                             i_slint_core::debug_log!(
                                 "Failed to reuse the shared WGPU device: {err} . Re-initializing"
                             );
@@ -312,6 +299,10 @@ impl crate::Surface for WGPUSurface {
         if self.surface.is_some() { "wgpu" } else { "wgpu-texture" }
     }
 
+    fn use_partial_rendering(&self) -> bool {
+        true
+    }
+
     fn resize_event(&self, size: PhysicalWindowSize) -> Result<(), PlatformError> {
         let mut surface_config_opt = self.surface_config.borrow_mut();
         let (Some(surface_config), Some(surface)) = (surface_config_opt.as_mut(), &self.surface)
@@ -319,16 +310,14 @@ impl crate::Surface for WGPUSurface {
             return Ok(());
         };
 
-        // Skip reconfigure if size hasn't changed — DRM/KMS surfaces don't
-        // support being reconfigured.
         if surface_config.width == size.width && surface_config.height == size.height {
             return Ok(());
         }
 
+        *self.backing_surface.borrow_mut() = None;
+
         {
             let gr_context = &mut self.gr_context.borrow_mut();
-            // This is brute force, but for the lack of access to the fences this seems to work: Avoid any pending work so that
-            // IDXGISwapChain::ResizeBuffers doesn't complain that the surface is still in use.
             gr_context.flush_submit_and_sync_cpu();
         }
 
@@ -367,12 +356,8 @@ impl crate::Surface for WGPUSurface {
             stale @ (wgpu::CurrentSurfaceTexture::Outdated
             | wgpu::CurrentSurfaceTexture::Suboptimal(_)
             | wgpu::CurrentSurfaceTexture::Lost) => {
-                // `Suboptimal` carries a live `SurfaceTexture`; matched with `_` it is not bound,
-                // so the value returned by `get_current_texture()` keeps it alive across the
-                // `surface.configure()` below — which wgpu forbids ("`SurfaceOutput` must be
-                // dropped before a new `Surface` is made"), panicking on the first frame on
-                // Wayland. Drop it first. (`Outdated`/`Lost` carry nothing → no-op.)
                 drop(stale);
+                *self.backing_surface.borrow_mut() = None;
                 surface.configure(&self.wgpu.device, surface_config);
                 match surface.get_current_texture() {
                     wgpu::CurrentSurfaceTexture::Success(t) => t,
@@ -381,10 +366,6 @@ impl crate::Surface for WGPUSurface {
             }
         };
 
-        // Skia renders through the raw backend queue, invisible to wgpu's usage
-        // tracking, so `Queue::present` would treat the frame as never written
-        // and clear it. Clear it through wgpu instead before Skia draws; the
-        // in-order queue keeps Skia's later-committed work on top.
         let view = frame.texture.create_view(&wgpu::TextureViewDescriptor::default());
         let mut encoder =
             self.wgpu.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -409,21 +390,41 @@ impl crate::Surface for WGPUSurface {
         self.wgpu.queue.submit(Some(encoder.finish()));
 
         let skia_surface = self.backend.make_swapchain_surface(gr_context, &frame.texture);
-
         let mut skia_surface = skia_surface
             .ok_or_else(|| PlatformError::from("Failed to create Skia surface from WGPU"))?;
 
-        callback(skia_surface.canvas(), Some(gr_context), 0);
+        let frame_size =
+            PhysicalWindowSize::new(frame.texture.width().max(1), frame.texture.height().max(1));
+        let mut backing_borrow = self.backing_surface.borrow_mut();
+        let mut age = 1u8;
+        if backing_borrow.as_ref().is_none_or(|(sz, _)| *sz != frame_size) {
+            let info = skia_safe::ImageInfo::new(
+                (frame_size.width as i32, frame_size.height as i32),
+                skia_safe::ColorType::RGBA8888,
+                skia_safe::AlphaType::Premul,
+                attachment_color_space(&frame.texture),
+            );
+            *backing_borrow =
+                skia_surface.canvas().new_surface(&info, None).map(|s| (frame_size, s));
+            age = 0;
+        }
+
+        if let Some((_, ref mut backing)) = *backing_borrow {
+            let b_canvas = backing.canvas();
+            b_canvas.save();
+            callback(b_canvas, Some(gr_context), age);
+            b_canvas.restore();
+            let snapshot = backing.image_snapshot();
+            skia_surface.canvas().draw_image(&snapshot, (0.0, 0.0), None);
+        } else {
+            callback(skia_surface.canvas(), Some(gr_context), 0);
+        }
+        drop(backing_borrow);
 
         self.backend.release_swapchain_surface(gr_context, &mut skia_surface);
 
         self.flush_and_submit(gr_context);
 
-        // Skia drew via the raw queue behind wgpu's back, and `Queue::present` skips its own
-        // transition when the tracker already says PRESENT, so nothing would order the
-        // presentation after Skia's work: the clear submission above signals its semaphore
-        // before Skia even starts. Referencing the frame texture in a submission of our own
-        // makes present wait for it.
         let mut encoder =
             self.wgpu.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("Skia present ordering encoder"),

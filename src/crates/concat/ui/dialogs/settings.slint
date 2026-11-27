@@ -671,6 +671,8 @@ export component SettingsDialog inherits Sheet {
     callback font-choice-changed(choice: int);
     callback gutter-style-changed(style: int);
     callback panel-borders-changed(on: bool);
+    callback motion-mode-changed(mode: int);
+    callback turbo-preview-changed(on: bool);
     callback layout-preset-chosen(preset: int);
     callback appearance-reset();
     /// The accent, as an index into `Theme.accent-names`.
@@ -1390,6 +1392,32 @@ export component SettingsDialog inherits Sheet {
                     on: Theme.panel-borders;
                     open: false;
                     switched(on) => { root.panel-borders-changed(on); }
+                }
+
+                DialogSection {
+                    ruled: false;
+                    title: I18n.t("settings.uiMotion");
+                    hint: I18n.t("settings.uiMotionHint");
+
+                    SegmentedControl {
+                        options: [
+                            I18n.t("settings.motionTurbo"),
+                            I18n.t("settings.motionSnappy"),
+                            I18n.t("settings.motionSmooth"),
+                        ];
+                        current: Theme.motion-mode;
+                        changed(index) => { root.motion-mode-changed(index); }
+                    }
+                }
+
+                DialogSection {
+                    ruled: false;
+                    title: I18n.t("settings.turboPreview");
+                    hint: I18n.t("settings.turboPreviewHint");
+                    switchable: true;
+                    on: Theme.turbo-preview;
+                    open: false;
+                    switched(on) => { root.turbo-preview-changed(on); }
                 }
 
                 if !root.phone: DialogSection {

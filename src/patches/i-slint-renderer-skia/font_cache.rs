@@ -113,8 +113,8 @@ use skrifa::{
 
 const HINTER_CACHE_CAPACITY: NonZeroUsize = NonZeroUsize::new(32).unwrap();
 const GLYPH_CACHE_CAPACITY: NonZeroUsize = NonZeroUsize::new(4096).unwrap();
-const ATLAS_DIM: i32 = 1024;
-const MAX_SPRITE_DIM: i32 = 128;
+const ATLAS_DIM: i32 = 512;
+const MAX_SPRITE_DIM: i32 = 96;
 
 #[derive(Clone, Copy)]
 pub struct GlyphSprite {
@@ -174,6 +174,7 @@ pub struct GlyphOutlineCache {
     glyphs: CLruCache<(HashedBlob, u32, u32, u64, u32), CachedGlyph>,
     atlas_surface: Option<skia_safe::Surface>,
     atlas_snapshot: Option<skia_safe::Image>,
+    atlas_is_gpu: bool,
     atlas_generation: u64,
     shelf_x: i32,
     shelf_y: i32,
@@ -182,15 +183,12 @@ pub struct GlyphOutlineCache {
 
 impl Default for GlyphOutlineCache {
     fn default() -> Self {
-        let mut atlas_surface = skia_safe::surfaces::raster_n32_premul((ATLAS_DIM, ATLAS_DIM));
-        if let Some(ref mut surface) = atlas_surface {
-            surface.canvas().clear(skia_safe::Color::TRANSPARENT);
-        }
         Self {
             hinters: CLruCache::new(HINTER_CACHE_CAPACITY),
             glyphs: CLruCache::new(GLYPH_CACHE_CAPACITY),
-            atlas_surface,
+            atlas_surface: None,
             atlas_snapshot: None,
+            atlas_is_gpu: false,
             atlas_generation: 1,
             shelf_x: 1,
             shelf_y: 1,
@@ -200,6 +198,42 @@ impl Default for GlyphOutlineCache {
 }
 
 impl GlyphOutlineCache {
+    pub fn reset_atlas(&mut self) {
+        self.atlas_surface = None;
+        self.atlas_snapshot = None;
+        self.atlas_is_gpu = false;
+        self.atlas_generation = self.atlas_generation.wrapping_add(1).max(1);
+        self.shelf_x = 1;
+        self.shelf_y = 1;
+        self.shelf_h = 0;
+    }
+
+    pub fn ensure_atlas(&mut self, target_canvas: &skia_safe::Canvas) {
+        let want_gpu = target_canvas.recording_context().is_some();
+        if self.atlas_surface.is_some() && self.atlas_is_gpu == want_gpu {
+            return;
+        }
+        let info = skia_safe::ImageInfo::new_n32_premul((ATLAS_DIM, ATLAS_DIM), None);
+        let mut is_gpu = false;
+        let mut surface = if want_gpu {
+            let gpu_surf = target_canvas.new_surface(&info, None);
+            is_gpu = gpu_surf.is_some();
+            gpu_surf.or_else(|| skia_safe::surfaces::raster_n32_premul((ATLAS_DIM, ATLAS_DIM)))
+        } else {
+            skia_safe::surfaces::raster_n32_premul((ATLAS_DIM, ATLAS_DIM))
+        };
+        if let Some(ref mut s) = surface {
+            s.canvas().clear(skia_safe::Color::TRANSPARENT);
+        }
+        self.atlas_surface = surface;
+        self.atlas_snapshot = None;
+        self.atlas_is_gpu = is_gpu;
+        self.atlas_generation = self.atlas_generation.wrapping_add(1).max(1);
+        self.shelf_x = 1;
+        self.shelf_y = 1;
+        self.shelf_h = 0;
+    }
+
     pub fn style_keys(
         font_size: f32,
         normalized_coords: &[i16],

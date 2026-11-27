@@ -202,6 +202,10 @@ export component TimelineTray inherits Rectangle {
     /// The mark over freeze, mirror and rotate: open its menu under the
     /// button at this x, hosted by the pane like the axis menu.
     callback transform-menu-requested(x: length);
+    /// The Pro Tools menu button: opens the Creator Pro Tools menu.
+    callback pro-tools-menu-requested(x: length);
+    /// The Clip Color Tag button: opens the 7-color clip tag menu.
+    callback tag-menu-requested(x: length);
     callback undo();
     callback redo();
     callback split();
@@ -216,8 +220,29 @@ export component TimelineTray inherits Rectangle {
     callback zoom(factor: float);
     callback meters-shown-changed(on: bool);
 
+    // Hidden TextInput used to copy formatted YouTube Chapters into the OS
+    // clipboard whenever `Editor.chapters-clipboard-token` bumps.
+    property <int> chapters-token: Editor.chapters-clipboard-token;
+    changed chapters-token => {
+        if (Editor.chapters-clipboard != "") {
+            chapters-clip.select-all();
+            chapters-clip.copy();
+            chapters-clip.clear-selection();
+        }
+    }
+
     height: 40px;
     background: Theme.panel;
+
+    chapters-clip := TextInput {
+        x: -200px;
+        y: -200px;
+        width: 1px;
+        height: 1px;
+        opacity: 0;
+        read-only: true;
+        text: Editor.chapters-clipboard;
+    }
 
     Rectangle {
         x: 0;
@@ -441,6 +466,47 @@ export component TimelineTray inherits Rectangle {
             width: 56px;
             horizontal-stretch: 0;
             value: root.record-level;
+        }
+
+        Divider { }
+
+        // Creator Pro Tools quick controls: Marker, Loop, Clip Color Tag, and Tools menu.
+        TrayButton {
+            glyph: Glyph.keyframe;
+            label: I18n.t("proTools.addRemoveMarker");
+            icon-size: 15px;
+            clicked => { Editor.pro-tool("marker-toggle"); }
+        }
+        TrayButton {
+            glyph: Glyph.reverse;
+            label: I18n.t("proTools.toggleLoop");
+            icon-size: 15px;
+            checked: Editor.loop-active;
+            clicked => { Editor.pro-tool("loop-toggle"); }
+        }
+        tag-btn := TrayButton {
+            glyph: Glyph.tag;
+            label: I18n.t("proTools.clipColorTag");
+            icon-size: 15px;
+            enabled: root.selected-count > 0;
+            clicked => { root.tag-menu-requested(tag-btn.x); }
+        }
+        pro-tools := HorizontalLayout {
+            spacing: 0;
+
+            TrayButton {
+                glyph: Glyph.wand;
+                label: I18n.t("proTools.title");
+                icon-size: 16px;
+                clicked => { root.pro-tools-menu-requested(pro-tools.x); }
+            }
+            TrayButton {
+                width: 16px;
+                glyph: Glyph.chevron-down;
+                label: I18n.t("proTools.title");
+                icon-size: 11px;
+                clicked => { root.pro-tools-menu-requested(pro-tools.x); }
+            }
         }
 
         Rectangle { horizontal-stretch: 1; }

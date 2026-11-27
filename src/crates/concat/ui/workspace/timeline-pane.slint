@@ -17,6 +17,7 @@ import { TimelineTray } from "../timeline/tray.slint";
 import { TrackHeaders } from "../timeline/track-header.slint";
 import { Lanes } from "../timeline/lanes.slint";
 import { VuMeter } from "../timeline/vu-meter.slint";
+import { Editor } from "../editor.slint";
 
 // The timeline pane: tabs, tray, and then the lane grid — a fixed header
 // column beside the lanes themselves, and the VU meters at their far edge.
@@ -76,6 +77,10 @@ export component TimelinePane inherits Rectangle {
     property <int> axis-token;
     /// Bumped to open the freeze, mirror and rotate menu.
     property <int> transform-token;
+    /// Bumped to open the Creator Pro Tools menu.
+    property <int> pro-tools-token;
+    /// Bumped to open the Clip Color Tags menu.
+    property <int> tag-token;
     /// One of that menu's verbs, by name: freeze, mirror, rotate.
     callback clip-verb(action: string);
     callback undo();
@@ -285,10 +290,482 @@ export component TimelinePane inherits Rectangle {
                 checkable: false,
                 checked: false,
             },
+            {
+                id: "",
+                label: "",
+                kind: MenuRow.separator,
+                glyph: Glyph.none,
+                shortcut: "",
+                enabled: false,
+                danger: false,
+                checkable: false,
+                checked: false,
+            },
+            {
+                id: "",
+                label: I18n.t("proTools.pipAndSplit"),
+                kind: MenuRow.label,
+                glyph: Glyph.none,
+                shortcut: "",
+                enabled: false,
+                danger: false,
+                checkable: false,
+                checked: false,
+            },
+            {
+                id: "pip-tl",
+                label: I18n.t("proTools.pipTopLeft"),
+                kind: MenuRow.action,
+                glyph: Glyph.frame,
+                shortcut: "",
+                enabled: root.picture-selected,
+                danger: false,
+                checkable: false,
+                checked: false,
+            },
+            {
+                id: "pip-tr",
+                label: I18n.t("proTools.pipTopRight"),
+                kind: MenuRow.action,
+                glyph: Glyph.frame,
+                shortcut: "",
+                enabled: root.picture-selected,
+                danger: false,
+                checkable: false,
+                checked: false,
+            },
+            {
+                id: "pip-bl",
+                label: I18n.t("proTools.pipBottomLeft"),
+                kind: MenuRow.action,
+                glyph: Glyph.frame,
+                shortcut: "",
+                enabled: root.picture-selected,
+                danger: false,
+                checkable: false,
+                checked: false,
+            },
+            {
+                id: "pip-br",
+                label: I18n.t("proTools.pipBottomRight"),
+                kind: MenuRow.action,
+                glyph: Glyph.frame,
+                shortcut: "",
+                enabled: root.picture-selected,
+                danger: false,
+                checkable: false,
+                checked: false,
+            },
+            {
+                id: "split-left",
+                label: I18n.t("proTools.splitLeft"),
+                kind: MenuRow.action,
+                glyph: Glyph.align-left,
+                shortcut: "",
+                enabled: root.picture-selected,
+                danger: false,
+                checkable: false,
+                checked: false,
+            },
+            {
+                id: "split-right",
+                label: I18n.t("proTools.splitRight"),
+                kind: MenuRow.action,
+                glyph: Glyph.align-right,
+                shortcut: "",
+                enabled: root.picture-selected,
+                danger: false,
+                checkable: false,
+                checked: false,
+            },
+            {
+                id: "split-top",
+                label: I18n.t("proTools.splitTop"),
+                kind: MenuRow.action,
+                glyph: Glyph.align-top,
+                shortcut: "",
+                enabled: root.picture-selected,
+                danger: false,
+                checkable: false,
+                checked: false,
+            },
+            {
+                id: "split-bottom",
+                label: I18n.t("proTools.splitBottom"),
+                kind: MenuRow.action,
+                glyph: Glyph.align-bottom,
+                shortcut: "",
+                enabled: root.picture-selected,
+                danger: false,
+                checkable: false,
+                checked: false,
+            },
+            {
+                id: "pip-reset",
+                label: I18n.t("proTools.resetLayout"),
+                kind: MenuRow.action,
+                glyph: Glyph.reset,
+                shortcut: "",
+                enabled: root.picture-selected,
+                danger: false,
+                checkable: false,
+                checked: false,
+            },
         ];
-        menu-height: 4 * MenuMetrics.action + MenuMetrics.padding;
+        menu-height: 13 * MenuMetrics.action + MenuMetrics.separator + MenuMetrics.label + MenuMetrics.padding;
         token: root.transform-token;
-        selected(id) => { root.clip-verb(id); }
+        selected(id) => {
+            if (id == "freeze" || id == "reverse" || id == "mirror" || id == "rotate") {
+                root.clip-verb(id);
+            } else {
+                Editor.pro-tool(id);
+            }
+        }
+    }
+
+    // Creator All-Rounder Pro Tools menu.
+    pro-tools-menu := ContextMenu {
+        x: 0;
+        y: 0;
+        width: parent.width;
+        height: parent.height;
+        items: [
+            {
+                id: "",
+                label: I18n.t("proTools.sectionEditAudio"),
+                kind: MenuRow.label,
+                glyph: Glyph.none,
+                shortcut: "",
+                enabled: false,
+                danger: false,
+                checkable: false,
+                checked: false,
+            },
+            {
+                id: "auto-cut-silence",
+                label: I18n.t("proTools.autoCutSilence"),
+                kind: MenuRow.action,
+                glyph: Glyph.razor,
+                shortcut: "Ctrl+Shift+X",
+                enabled: true,
+                danger: false,
+                checkable: false,
+                checked: false,
+            },
+            {
+                id: "close-gaps",
+                label: I18n.t("proTools.closeAllGaps"),
+                kind: MenuRow.action,
+                glyph: Glyph.fold,
+                shortcut: "Ctrl+Shift+G",
+                enabled: true,
+                danger: false,
+                checkable: false,
+                checked: false,
+            },
+            {
+                id: "select-forward",
+                label: I18n.t("proTools.selectTrackForward"),
+                kind: MenuRow.action,
+                glyph: Glyph.skip-forward,
+                shortcut: "A",
+                enabled: true,
+                danger: false,
+                checkable: false,
+                checked: false,
+            },
+            {
+                id: "quick-fades",
+                label: I18n.t("proTools.quickFades"),
+                kind: MenuRow.action,
+                glyph: Glyph.sliders,
+                shortcut: "",
+                enabled: true,
+                danger: false,
+                checkable: false,
+                checked: false,
+            },
+            {
+                id: "crossfade-all",
+                label: I18n.t("proTools.crossfadeAllCuts"),
+                kind: MenuRow.action,
+                glyph: Glyph.transition,
+                shortcut: "",
+                enabled: true,
+                danger: false,
+                checkable: false,
+                checked: false,
+            },
+            {
+                id: "copy-attributes",
+                label: I18n.t("proTools.copyAttributes"),
+                kind: MenuRow.action,
+                glyph: Glyph.copy,
+                shortcut: "Ctrl+Shift+C",
+                enabled: root.selected-count > 0,
+                danger: false,
+                checkable: false,
+                checked: false,
+            },
+            {
+                id: "paste-attributes",
+                label: I18n.t("proTools.pasteAttributes"),
+                kind: MenuRow.action,
+                glyph: Glyph.sparkle,
+                shortcut: "Ctrl+Shift+V",
+                enabled: Editor.has-copied-attributes && root.selected-count > 0,
+                danger: false,
+                checkable: false,
+                checked: false,
+            },
+            {
+                id: "",
+                label: "",
+                kind: MenuRow.separator,
+                glyph: Glyph.none,
+                shortcut: "",
+                enabled: false,
+                danger: false,
+                checkable: false,
+                checked: false,
+            },
+            {
+                id: "",
+                label: I18n.t("proTools.sectionMarkersLoop"),
+                kind: MenuRow.label,
+                glyph: Glyph.none,
+                shortcut: "",
+                enabled: false,
+                danger: false,
+                checkable: false,
+                checked: false,
+            },
+            {
+                id: "marker-toggle",
+                label: I18n.t("proTools.addRemoveMarker"),
+                kind: MenuRow.action,
+                glyph: Glyph.keyframe,
+                shortcut: "Shift+M",
+                enabled: true,
+                danger: false,
+                checkable: false,
+                checked: false,
+            },
+            {
+                id: "marker-prev",
+                label: I18n.t("proTools.prevMarker"),
+                kind: MenuRow.action,
+                glyph: Glyph.skip-back,
+                shortcut: "[",
+                enabled: Editor.marker-times.length > 0,
+                danger: false,
+                checkable: false,
+                checked: false,
+            },
+            {
+                id: "marker-next",
+                label: I18n.t("proTools.nextMarker"),
+                kind: MenuRow.action,
+                glyph: Glyph.skip-forward,
+                shortcut: "]",
+                enabled: Editor.marker-times.length > 0,
+                danger: false,
+                checkable: false,
+                checked: false,
+            },
+            {
+                id: "marker-copy-chapters",
+                label: I18n.t("proTools.copyYoutubeChapters"),
+                kind: MenuRow.action,
+                glyph: Glyph.copy,
+                shortcut: "",
+                enabled: Editor.marker-times.length > 0,
+                danger: false,
+                checkable: false,
+                checked: false,
+            },
+            {
+                id: "marker-clear",
+                label: I18n.t("proTools.clearMarkers"),
+                kind: MenuRow.action,
+                glyph: Glyph.trash,
+                shortcut: "",
+                enabled: Editor.marker-times.length > 0,
+                danger: true,
+                checkable: false,
+                checked: false,
+            },
+            {
+                id: "",
+                label: "",
+                kind: MenuRow.separator,
+                glyph: Glyph.none,
+                shortcut: "",
+                enabled: false,
+                danger: false,
+                checkable: false,
+                checked: false,
+            },
+            {
+                id: "loop-in",
+                label: I18n.t("proTools.setLoopIn"),
+                kind: MenuRow.action,
+                glyph: Glyph.step-back,
+                shortcut: "I",
+                enabled: true,
+                danger: false,
+                checkable: false,
+                checked: false,
+            },
+            {
+                id: "loop-out",
+                label: I18n.t("proTools.setLoopOut"),
+                kind: MenuRow.action,
+                glyph: Glyph.step-forward,
+                shortcut: "O",
+                enabled: true,
+                danger: false,
+                checkable: false,
+                checked: false,
+            },
+            {
+                id: "loop-toggle",
+                label: I18n.t("proTools.toggleLoop"),
+                kind: MenuRow.action,
+                glyph: Glyph.none,
+                shortcut: "Shift+L",
+                enabled: true,
+                danger: false,
+                checkable: true,
+                checked: Editor.loop-active,
+            },
+            {
+                id: "loop-clear",
+                label: I18n.t("proTools.clearLoop"),
+                kind: MenuRow.action,
+                glyph: Glyph.close,
+                shortcut: "",
+                enabled: Editor.loop-in >= 0 || Editor.loop-out >= 0,
+                danger: false,
+                checkable: false,
+                checked: false,
+            },
+        ];
+        menu-height: 16 * MenuMetrics.action + 2 * MenuMetrics.label + 2 * MenuMetrics.separator + MenuMetrics.padding;
+        token: root.pro-tools-token;
+        selected(id) => { Editor.pro-tool(id); }
+    }
+
+    // Clip Color Tags menu.
+    tag-menu := ContextMenu {
+        x: 0;
+        y: 0;
+        width: parent.width;
+        height: parent.height;
+        items: [
+            {
+                id: "",
+                label: I18n.t("proTools.clipColorTag"),
+                kind: MenuRow.label,
+                glyph: Glyph.none,
+                shortcut: "",
+                enabled: false,
+                danger: false,
+                checkable: false,
+                checked: false,
+            },
+            {
+                id: "tag-0",
+                label: I18n.t("proTools.tagDefault"),
+                kind: MenuRow.action,
+                glyph: Glyph.reset,
+                shortcut: "",
+                enabled: root.selected-count > 0,
+                danger: false,
+                checkable: false,
+                checked: false,
+            },
+            {
+                id: "tag-1",
+                label: I18n.t("proTools.tagRed"),
+                kind: MenuRow.action,
+                glyph: Glyph.tag,
+                shortcut: "",
+                enabled: root.selected-count > 0,
+                danger: false,
+                checkable: false,
+                checked: false,
+            },
+            {
+                id: "tag-2",
+                label: I18n.t("proTools.tagOrange"),
+                kind: MenuRow.action,
+                glyph: Glyph.tag,
+                shortcut: "",
+                enabled: root.selected-count > 0,
+                danger: false,
+                checkable: false,
+                checked: false,
+            },
+            {
+                id: "tag-3",
+                label: I18n.t("proTools.tagAmber"),
+                kind: MenuRow.action,
+                glyph: Glyph.tag,
+                shortcut: "",
+                enabled: root.selected-count > 0,
+                danger: false,
+                checkable: false,
+                checked: false,
+            },
+            {
+                id: "tag-4",
+                label: I18n.t("proTools.tagEmerald"),
+                kind: MenuRow.action,
+                glyph: Glyph.tag,
+                shortcut: "",
+                enabled: root.selected-count > 0,
+                danger: false,
+                checkable: false,
+                checked: false,
+            },
+            {
+                id: "tag-5",
+                label: I18n.t("proTools.tagCyan"),
+                kind: MenuRow.action,
+                glyph: Glyph.tag,
+                shortcut: "",
+                enabled: root.selected-count > 0,
+                danger: false,
+                checkable: false,
+                checked: false,
+            },
+            {
+                id: "tag-6",
+                label: I18n.t("proTools.tagViolet"),
+                kind: MenuRow.action,
+                glyph: Glyph.tag,
+                shortcut: "",
+                enabled: root.selected-count > 0,
+                danger: false,
+                checkable: false,
+                checked: false,
+            },
+            {
+                id: "tag-7",
+                label: I18n.t("proTools.tagRose"),
+                kind: MenuRow.action,
+                glyph: Glyph.tag,
+                shortcut: "",
+                enabled: root.selected-count > 0,
+                danger: false,
+                checkable: false,
+                checked: false,
+            },
+        ];
+        menu-height: 8 * MenuMetrics.action + MenuMetrics.label + MenuMetrics.padding;
+        token: root.tag-token;
+        selected(id) => { Editor.pro-tool(id); }
     }
 
     Pane {
@@ -371,6 +848,18 @@ export component TimelinePane inherits Rectangle {
                 transform-menu.request-y = tray.absolute-position.y - root.absolute-position.y
                     + tray.height;
                 root.transform-token += 1;
+            }
+            pro-tools-menu-requested(x) => {
+                pro-tools-menu.request-x = tray.absolute-position.x - root.absolute-position.x + x;
+                pro-tools-menu.request-y = tray.absolute-position.y - root.absolute-position.y
+                    + tray.height;
+                root.pro-tools-token += 1;
+            }
+            tag-menu-requested(x) => {
+                tag-menu.request-x = tray.absolute-position.x - root.absolute-position.x + x;
+                tag-menu.request-y = tray.absolute-position.y - root.absolute-position.y
+                    + tray.height;
+                root.tag-token += 1;
             }
             undo => { root.undo(); }
             redo => { root.redo(); }

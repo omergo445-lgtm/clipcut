@@ -172,6 +172,8 @@ impl Studio {
                 self.transition_selected = None;
                 self.media.selected.clear();
                 self.playhead = 0.0;
+                self.loop_playback = false;
+                self.load_tools_meta();
                 self.handle(crate::panes::Msg::Timeline(
                     crate::panes::timeline::TimelineMsg::Reset,
                 ));

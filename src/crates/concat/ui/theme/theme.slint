@@ -112,6 +112,11 @@ export global Theme {
     in-out property <int> gutter-style: 2;
     /// Optional 1px crisp outlines around workspace panels.
     in-out property <bool> panel-borders: false;
+    /// UI motion speed: 0 = Turbo (0ms, zero-lag instant), 1 = Snappy (65ms), 2 = Smooth (140ms).
+    in-out property <int> motion-mode: 0;
+    out property <duration> anim-fast: motion-mode == 0 ? 0ms : motion-mode == 1 ? 65ms : 140ms;
+    /// Turbo Preview Engine: paces >30fps timeline live previews to 30fps and defaults >1080p to 1/4 quality.
+    in-out property <bool> turbo-preview: true;
 
     // ── type ─────────────────────────────────────────────────────────────
     //

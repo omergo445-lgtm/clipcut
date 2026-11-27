@@ -306,12 +306,20 @@ impl MonitorPane {
     }
 
     /// The quality tier for the project's active timeline: 0 full, 1
-    /// half, 2 quarter. Half until chosen.
+    /// half, 2 quarter. Quarter by default on >1080p (4K) timelines so low-VRAM
+    /// GPUs play smoothly out of the box; Half on <=1080p timelines.
     pub fn quality_of(&self, project: &Project) -> usize {
         self.quality
             .get(&project.active_timeline_id)
             .copied()
-            .unwrap_or(1)
+            .unwrap_or_else(|| {
+                let video = &project.active().video;
+                if video.width.max(video.height) > 1920 {
+                    2
+                } else {
+                    1
+                }
+            })
     }
 
     /// The frame's size at a quality tier: the output scaled, rounded to

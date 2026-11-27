@@ -53,6 +53,8 @@ impl Studio {
             "duplicate" | "mute" => {
                 if let Some(id) = self.sole_selection() {
                     self.clip_action(&id, action);
+                } else if action == "mute" {
+                    self.run_pro_tool("marker-toggle");
                 }
             }
             // The tray's picture verbs. Mirror is the flip the H key does,
@@ -75,7 +77,7 @@ impl Studio {
                 let after = self.sole_selection();
                 self.paste_clips(after.as_deref());
             }
-            _ => {}
+            other => self.run_pro_tool(other),
         }
     }
 
@@ -263,7 +265,7 @@ impl Studio {
                 }
                 self.menu_target = None;
             }
-            _ => {}
+            other => self.run_pro_tool(other),
         }
     }
 

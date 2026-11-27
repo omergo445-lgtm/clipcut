@@ -119,6 +119,10 @@ pub struct Preferences {
     pub gutter_style: Option<i32>,
     /// Optional 1px outlines around workspace panels.
     pub panel_borders: bool,
+    /// UI motion speed (`0 = Turbo (0ms)`, `1 = Snappy (65ms)`, `2 = Smooth (140ms)`).
+    pub motion_mode: Option<i32>,
+    /// Turbo Preview Engine (`true` by default: paces >30fps timeline previews to 30fps).
+    pub turbo_preview: Option<bool>,
     /// The chosen transcriber model id, e.g. "base.en".
     pub transcriber_model: Option<String>,
     /// The language the captions sheet last asked the transcriber for, by

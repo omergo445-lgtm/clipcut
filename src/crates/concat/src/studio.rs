@@ -65,6 +65,7 @@ mod menus;
 mod merge_words_tests;
 mod monitor;
 mod placing;
+pub mod pro_tools;
 mod project_files;
 mod publish;
 mod speech;
@@ -849,6 +850,10 @@ pub struct Models {
     pub font_matches: Rc<VecModel<SharedString>>,
     /// The text presets the captions' style search lets through.
     pub caption_styles: Rc<VecModel<TextPresetData>>,
+    /// Active timeline's markers for the ruler.
+    pub marker_times: Rc<VecModel<f32>>,
+    pub marker_names: Rc<VecModel<SharedString>>,
+    pub marker_colors: Rc<VecModel<i32>>,
 }
 
 impl Models {
@@ -926,6 +931,9 @@ impl Models {
             font_families: Rc::new(VecModel::default()),
             font_matches: Rc::new(VecModel::default()),
             caption_styles: Rc::new(VecModel::default()),
+            marker_times: Rc::new(VecModel::default()),
+            marker_names: Rc::new(VecModel::default()),
+            marker_colors: Rc::new(VecModel::default()),
         }
     }
 }
@@ -1359,6 +1367,14 @@ pub struct Studio {
     /// Cutouts and smart strokes the app died working on, by their masks'
     /// folder: not started again by themselves, and said once a session.
     tripped_strokes: HashSet<std::path::PathBuf>,
+
+    // ── Creator All-Rounder Pro Tools ──
+    pub tools_meta: pro_tools::ProjectToolsMeta,
+    pub loop_playback: bool,
+    pub preview_guides: i32,
+    pub copied_attributes: Option<Clip>,
+    pub chapters_clipboard: String,
+    pub chapters_clipboard_token: i32,
 }
 
 // ── conversions between the document and the window ─────────────────────
@@ -3221,6 +3237,12 @@ impl Studio {
             region_job: None,
             pending_stroke: None,
             tripped_strokes: HashSet::new(),
+            tools_meta: pro_tools::ProjectToolsMeta::default(),
+            loop_playback: false,
+            preview_guides: 0,
+            copied_attributes: None,
+            chapters_clipboard: String::new(),
+            chapters_clipboard_token: 0,
             host,
         };
         studio.handle(crate::panes::Msg::Settings(

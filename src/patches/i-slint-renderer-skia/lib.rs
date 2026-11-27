@@ -393,7 +393,7 @@ fn create_partial_renderer_state(
 ) -> Option<PartialRenderingState> {
     maybe_surface
         .map_or_else(
-            || std::env::var("SLINT_SKIA_PARTIAL_RENDERING").as_deref().is_ok(),
+            || std::env::var("SLINT_SKIA_PARTIAL_RENDERING").map_or(true, |v| v != "0"),
             |surface| surface.use_partial_rendering(),
         )
         .then(PartialRenderingState::default)
@@ -606,11 +606,16 @@ impl SkiaRenderer {
         self.path_cache.clear_all();
         self.box_shadow_cache.clear();
         self.text_layout_cache.clear_all();
+        font_cache::GLYPH_OUTLINE_CACHE.with_borrow_mut(|c| c.reset_atlas());
     }
 
     /// Reset the surface to a new surface. (destroy the previously set surface if any)
     pub fn set_surface(&self, surface: Box<dyn Surface + 'static>) {
         self.clear_graphics_caches();
+        if let Some(partial) = &self.partial_rendering_state {
+            partial.clear_cache();
+            partial.force_screen_refresh();
+        }
         self.rendering_first_time.set(true);
         *self.surface.borrow_mut() = Some(surface);
     }
@@ -867,6 +872,9 @@ impl SkiaRenderer {
 
                 let visualize =
                     matches!(self.dirty_region_debug_mode, DirtyRegionDebugMode::Visualize);
+                if !visualize && partial_renderer.dirty_region.iter().next().is_none() {
+                    return dirty_region;
+                }
                 if !visualize && partial_renderer.dirty_region.iter().count() == 1 {
                     let dirty_rect = partial_renderer.dirty_region.iter().next().unwrap();
                     let physical_rect = (dirty_rect * scale_factor).to_rect().round_out();
@@ -979,6 +987,13 @@ impl SkiaRenderer {
     fn partial_rendering_state(&self) -> Option<&PartialRenderingState> {
         // We don't know where the application might render to, so disable partial rendering.
         if self.rendering_notifier.borrow().is_some() {
+            None
+        } else if self
+            .surface
+            .borrow()
+            .as_ref()
+            .is_some_and(|s| !s.use_partial_rendering())
+        {
             None
         } else {
             self.partial_rendering_state.as_ref()

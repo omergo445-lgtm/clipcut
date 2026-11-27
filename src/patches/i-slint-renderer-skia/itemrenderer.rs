@@ -1137,6 +1137,7 @@ impl GlyphRenderer for SkiaItemRenderer<'_> {
         let y_off = y_offset.get();
 
         let atlas_img = crate::font_cache::GLYPH_OUTLINE_CACHE.with_borrow_mut(|outline_cache| {
+            outline_cache.ensure_atlas(self.canvas);
             for g in glyphs_it {
                 let gx = if dense { g.x } else { g.x.round() };
                 let gy = if dense { g.y + y_off } else { (g.y + y_off).round() };

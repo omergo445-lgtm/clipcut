@@ -209,6 +209,43 @@ impl Studio {
             .set_preview_frame(self.monitor.image.clone());
     }
 
+    /// Lightweight playback tick: updates only the playhead, scroll position,
+    /// active monitor picture state, and stage overlay without rebuilding clip
+    /// waveforms or inspector models 30-60 times per second.
+    pub fn publish_playhead(&self, app: &App, models: &Models) {
+        let editor = app.global::<Editor>();
+        let timeline = self.timeline();
+        let playhead = f64::from(self.playhead);
+        let showing = timeline
+            .clips
+            .iter()
+            .filter(|clip| {
+                (clip.kind.is_visual()
+                    || matches!(clip.kind, model::ClipKind::Text | model::ClipKind::Shape))
+                    && clip.start <= playhead
+                    && playhead < clip.start + clip.duration
+            })
+            .max_by_key(|clip| -self.row_of(&clip.track_id));
+        let source = self
+            .source
+            .as_ref()
+            .filter(|source| source.kind != model::MediaKind::Audio);
+        editor.set_has_picture(source.is_some() || showing.is_some());
+        editor.set_preview_clip_name(
+            source
+                .map(|source| source.name.as_str())
+                .or(showing.map(|clip| clip.name.as_str()))
+                .unwrap_or_default()
+                .into(),
+        );
+        editor.set_playing(self.playing);
+        editor.set_playhead(self.playhead);
+        editor.set_scroll_left(self.lanes.scroll_left);
+        if !self.selection.is_empty() {
+            sync(&models.stage, self.stage_items());
+        }
+    }
+
     /// The timeline and the readouts that follow it: what runs on every
     /// event of a scrub, a drag, a trim or a knob.
     pub fn publish_lanes(&self, app: &App, models: &Models) {
@@ -328,6 +365,7 @@ impl Studio {
                         bars: marks.1,
                         has_audio: self.clip_has_sound(clip),
                         strip: self.strip_of(clip),
+                        tag_color: self.clip_tag_color(&clip.id),
                     }
                 })
                 .collect(),
@@ -465,6 +503,30 @@ impl Studio {
         editor.set_timeline_current_tab(active as i32);
         editor.set_playhead(self.playhead);
         sync(&models.key_marks, self.key_marks());
+        let markers = self.active_markers();
+        sync(
+            &models.marker_times,
+            markers.iter().map(|m| m.time).collect(),
+        );
+        sync(
+            &models.marker_names,
+            markers
+                .iter()
+                .map(|m| SharedString::from(m.name.as_str()))
+                .collect(),
+        );
+        sync(
+            &models.marker_colors,
+            markers.iter().map(|m| m.color).collect(),
+        );
+        let (loop_in, loop_out) = self.active_loop_points();
+        editor.set_loop_in(loop_in);
+        editor.set_loop_out(loop_out);
+        editor.set_loop_active(self.loop_playback);
+        editor.set_preview_guides(self.preview_guides);
+        editor.set_has_copied_attributes(self.copied_attributes.is_some());
+        editor.set_chapters_clipboard(self.chapters_clipboard.as_str().into());
+        editor.set_chapters_clipboard_token(self.chapters_clipboard_token);
         editor.set_scroll_left(self.lanes.scroll_left);
         editor.set_seconds_per_pixel(self.lanes.seconds_per_pixel);
         editor.set_duration_seconds(self.duration());

@@ -213,8 +213,17 @@ impl Studio {
             return;
         }
         // Playing from the tail would sit there doing nothing, so the
-        // button rewinds first - what every editor does.
-        if self.playhead >= self.duration() {
+        // button rewinds first - what every editor does. When Loop Playback
+        // is active with a valid [In..Out] range, start inside the range.
+        if let Some((in_pt, out_pt)) = self
+            .loop_playback
+            .then(|| self.active_loop_range())
+            .flatten()
+        {
+            if self.playhead < in_pt || self.playhead >= out_pt {
+                self.playhead = in_pt;
+            }
+        } else if self.playhead >= self.duration() {
             self.playhead = 0.0;
         }
         // The transport owns the monitor from here; a frame from under a
@@ -235,12 +244,28 @@ impl Studio {
             std::time::Duration::from_millis(8),
             move || {
                 crate::host::Shell::with(|shell, app| {
+                    let mut full_publish = false;
                     {
                         let mut studio = shell.studio.borrow_mut();
                         let end = studio.duration();
-                        let position = studio.host.playback.position_now() as f32;
+                        let mut position = studio.host.playback.position_now() as f32;
+                        if studio.loop_playback
+                            && let Some((in_pt, out_pt)) = studio.active_loop_range()
+                            && position >= out_pt.min(end)
+                        {
+                            position = in_pt;
+                            shown = None;
+                            studio.playhead = in_pt;
+                            studio.host.playback.play(f64::from(in_pt));
+                        }
                         let fps = studio.project().active().video.rate();
-                        let frame = (f64::from(position) * fps + 1e-6).floor() as i64;
+                        let preview_fps = if studio.prefs.turbo_preview.unwrap_or(true) && fps > 31.0
+                        {
+                            (fps * 0.5).min(30.0)
+                        } else {
+                            fps
+                        };
+                        let frame = (f64::from(position) * preview_fps + 1e-6).floor() as i64;
                         if position < end && shown == Some(frame) {
                             return;
                         }
@@ -254,6 +279,7 @@ impl Studio {
                         if studio.lanes.centred {
                             let playhead = studio.playhead;
                             studio.lanes.recentre(playhead);
+                            full_publish = true;
                         } else if let Some((low, high)) = studio.lanes.published_span() {
                             let screen = (high - low) / 3.0;
                             let left = studio.lanes.scroll_left;
@@ -263,15 +289,22 @@ impl Studio {
                             {
                                 studio.lanes.scroll_left =
                                     (studio.playhead - screen * 0.05).max(0.0);
+                                full_publish = true;
                             }
                         }
                         if position >= end {
                             studio.pause();
+                            full_publish = true;
                         } else {
                             studio.request_preview();
                         }
                     }
-                    shell.studio.borrow().publish_lanes(&app, &shell.models);
+                    let studio = shell.studio.borrow();
+                    if full_publish {
+                        studio.publish_lanes(&app, &shell.models);
+                    } else {
+                        studio.publish_playhead(&app, &shell.models);
+                    }
                 });
             },
         );

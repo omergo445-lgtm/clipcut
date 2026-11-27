@@ -511,6 +511,8 @@ fn start(project: Option<std::path::PathBuf>, smoke: Smoke) -> Result<(), slint:
         theme.set_density(studio.prefs.ui_density.unwrap_or(1).clamp(0, 2));
         theme.set_font_choice(studio.prefs.font_choice.unwrap_or(1).clamp(0, 3));
         theme.set_panel_borders(studio.prefs.panel_borders);
+        theme.set_motion_mode(studio.prefs.motion_mode.unwrap_or(0).clamp(0, 2));
+        theme.set_turbo_preview(studio.prefs.turbo_preview.unwrap_or(true));
 
         let (mode, dark) = match studio.prefs.surface_mode {
             Some(5) => {
@@ -626,11 +628,10 @@ fn start(project: Option<std::path::PathBuf>, smoke: Smoke) -> Result<(), slint:
     });
     Shell::install(shell.clone());
 
-    // The machine's fonts, for the Text inspector's picker. Read on a
-    // worker: on a machine with a few thousand faces it is a moment, and
-    // the window should not open a moment late for a list nobody is
-    // looking at yet.
-    host::spawn(
+    // The machine's fonts, for the Text inspector's picker. Read on the
+    // long-running background pool so the interactive IO pool is never
+    // tied up while fontconfig scans thousands of faces.
+    host::spawn_long(
         || concat_text::Fonts::new().families(),
         |studio, _, _, families| studio.system_fonts_known(families),
     );
@@ -697,6 +698,9 @@ fn start(project: Option<std::path::PathBuf>, smoke: Smoke) -> Result<(), slint:
         editor.set_visual_curves(ModelRc::from(models.visual_curves.clone()));
         editor.set_visual_colours(ModelRc::from(models.visual_colours.clone()));
         editor.set_visual_choices(ModelRc::from(models.visual_choices.clone()));
+        editor.set_marker_times(ModelRc::from(models.marker_times.clone()));
+        editor.set_marker_names(ModelRc::from(models.marker_names.clone()));
+        editor.set_marker_colors(ModelRc::from(models.marker_colors.clone()));
         app.global::<Keyframes>()
             .set_rows(ModelRc::from(models.key_rows.clone()));
         app.global::<KeyEditor>()
@@ -1396,6 +1400,9 @@ fn start(project: Option<std::path::PathBuf>, smoke: Smoke) -> Result<(), slint:
     }));
     editor.on_merge(on_window!(|state| {
         state.merge();
+    }));
+    editor.on_pro_tool(on_window!(|state, action: SharedString| {
+        state.run_pro_tool(action.as_str());
     }));
 
     // ── the view ──
@@ -2402,6 +2409,29 @@ fn start(project: Option<std::path::PathBuf>, smoke: Smoke) -> Result<(), slint:
             });
         }
     });
+    app.on_settings_motion_mode_changed({
+        move |mode| {
+            let mode = mode.clamp(0, 2);
+            log::info!("settings: UI motion mode {mode}");
+            Shell::with(|shell, app| {
+                app.global::<Theme>().set_motion_mode(mode);
+                let mut studio = shell.studio.borrow_mut();
+                studio.prefs.motion_mode = Some(mode);
+                studio.prefs.save(&studio.host.dirs);
+            });
+        }
+    });
+    app.on_settings_turbo_preview_changed({
+        move |on| {
+            log::info!("settings: Turbo preview {on}");
+            Shell::with(|shell, app| {
+                app.global::<Theme>().set_turbo_preview(on);
+                let mut studio = shell.studio.borrow_mut();
+                studio.prefs.turbo_preview = Some(on);
+                studio.prefs.save(&studio.host.dirs);
+            });
+        }
+    });
     app.on_settings_layout_preset_chosen({
         move |preset| {
             log::info!("settings: Workspace layout preset {preset}");
@@ -2434,6 +2464,8 @@ fn start(project: Option<std::path::PathBuf>, smoke: Smoke) -> Result<(), slint:
                 theme.set_font_choice(1);
                 theme.set_gutter_style(2);
                 theme.set_panel_borders(false);
+                theme.set_motion_mode(0);
+                theme.set_turbo_preview(true);
                 theme.set_ui_scale(0);
                 {
                     let mut studio = shell.studio.borrow_mut();
@@ -2447,6 +2479,8 @@ fn start(project: Option<std::path::PathBuf>, smoke: Smoke) -> Result<(), slint:
                     studio.prefs.font_choice = None;
                     studio.prefs.gutter_style = None;
                     studio.prefs.panel_borders = false;
+                    studio.prefs.motion_mode = None;
+                    studio.prefs.turbo_preview = None;
                     studio.prefs.ui_scale = None;
                     studio.prefs.save(&studio.host.dirs);
                 }

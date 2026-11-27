@@ -181,6 +181,51 @@ pub const ACTIONS: &[Action] = &[
         id: "next-edit",
         defaults: &["down"],
     },
+    // Creator Pro Tools.
+    Action {
+        id: "marker-toggle",
+        defaults: &["shift+m"],
+    },
+    Action {
+        id: "marker-prev",
+        defaults: &["["],
+    },
+    Action {
+        id: "marker-next",
+        defaults: &["]"],
+    },
+    Action {
+        id: "loop-in",
+        defaults: &["i"],
+    },
+    Action {
+        id: "loop-out",
+        defaults: &["o"],
+    },
+    Action {
+        id: "loop-toggle",
+        defaults: &["shift+l"],
+    },
+    Action {
+        id: "select-forward",
+        defaults: &["a"],
+    },
+    Action {
+        id: "copy-attributes",
+        defaults: &["ctrl+shift+c"],
+    },
+    Action {
+        id: "paste-attributes",
+        defaults: &["ctrl+shift+v"],
+    },
+    Action {
+        id: "close-gaps",
+        defaults: &["ctrl+shift+g"],
+    },
+    Action {
+        id: "auto-cut-silence",
+        defaults: &["ctrl+shift+x"],
+    },
 ];
 
 /// The action a row and a dispatch speak, by its id.
@@ -227,6 +272,17 @@ pub fn name(id: &str) -> String {
         "step-forward" => i18n::t("shortcuts.stepForward"),
         "prev-edit" => i18n::t("shortcuts.prevEdit"),
         "next-edit" => i18n::t("shortcuts.nextEdit"),
+        "marker-toggle" => i18n::t("proTools.addRemoveMarker"),
+        "marker-prev" => i18n::t("proTools.prevMarker"),
+        "marker-next" => i18n::t("proTools.nextMarker"),
+        "loop-in" => i18n::t("proTools.setLoopIn"),
+        "loop-out" => i18n::t("proTools.setLoopOut"),
+        "loop-toggle" => i18n::t("proTools.toggleLoop"),
+        "select-forward" => i18n::t("proTools.selectTrackForward"),
+        "copy-attributes" => i18n::t("proTools.copyAttributes"),
+        "paste-attributes" => i18n::t("proTools.pasteAttributes"),
+        "close-gaps" => i18n::t("proTools.closeAllGaps"),
+        "auto-cut-silence" => i18n::t("proTools.autoCutSilence"),
         _ => String::new(),
     }
 }
