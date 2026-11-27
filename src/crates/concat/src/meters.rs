@@ -72,6 +72,7 @@ pub struct MeterFeed {
     pub clipped: bool,
     /// The window is a phone's, whose shell has no meters to feed.
     pub phone: bool,
+    last_tick: Option<std::time::Instant>,
     timer: slint::Timer,
 }
 
@@ -86,20 +87,72 @@ impl Studio {
         self.playing || self.source.as_ref().is_some_and(|source| source.playing)
     }
 
-    /// Something started playing, or the meters came into view while it
-    /// plays: they follow it. Nothing happens when nobody can see them.
-    pub fn wake_meters(&self) {
-        if self.meters.timer.running() || !self.rolling() || !self.meters_shown() {
+    /// Ticks and publishes the VU meters synchronously inside the playback
+    /// frame arrival callback so playhead, preview picture, and VU bars share
+    /// ONE single full-window GPU repaint per video frame.
+    pub fn tick_meters_synced(&mut self, app: &crate::ui::App) {
+        if !self.meters_shown() {
             return;
         }
-        // The peaks playback kept while nobody was reading them belong to
-        // some earlier moment; the first tick is to show this one.
+        let now = std::time::Instant::now();
+        let dt = self
+            .meters
+            .last_tick
+            .replace(now)
+            .map_or(TICK.as_secs_f32(), |prev| {
+                prev.elapsed().as_secs_f32().clamp(0.004, 0.25)
+            });
+        let (left, right) = self.host.playback.take_levels();
+        self.meters.left.tick(left, dt);
+        self.meters.right.tick(right, dt);
+        self.meters.clipped |= left >= 1.0 || right >= 1.0;
+        self.meters.publish(app);
+    }
+
+    /// Something started playing, or the meters came into view while it
+    /// plays: they follow it. During timeline playback the meters are ticked
+    /// synchronously with each presented video frame so they never cause extra
+    /// out-of-phase full-window repaints.
+    pub fn wake_meters(&self) {
+        if !self.meters_shown() {
+            return;
+        }
+        if self.playing {
+            // Timeline playback ticks meters directly in `tick_meters_synced`.
+            self.meters.timer.stop();
+            let _ = self.host.playback.take_levels();
+            return;
+        }
+        if self.meters.timer.running() || !self.rolling() {
+            return;
+        }
         let _ = self.host.playback.take_levels();
+        self.start_meter_timer();
+    }
+
+    /// Starts the meter decay timer after playback pauses so the bars fall
+    /// smoothly back to the floor and then stop the timer cleanly.
+    pub fn wake_meters_falloff(&self) {
+        if !self.meters_shown() || self.meters.timer.running() {
+            return;
+        }
+        if self.meters.left.quiet() && self.meters.right.quiet() {
+            return;
+        }
+        self.start_meter_timer();
+    }
+
+    fn start_meter_timer(&self) {
         self.meters
             .timer
             .start(slint::TimerMode::Repeated, TICK, || {
                 crate::host::Shell::with(|shell, app| {
                     let mut studio = shell.studio.borrow_mut();
+                    // Timeline playback drives meters in lockstep with frames.
+                    if studio.playing {
+                        studio.meters.timer.stop();
+                        return;
+                    }
                     let rolling = studio.rolling();
                     let shown = studio.meters_shown();
                     let (left, right) = studio.host.playback.take_levels();
@@ -110,6 +163,7 @@ impl Studio {
                         // the meters are shown again, and the timer stops.
                         feed.left = Side::default();
                         feed.right = Side::default();
+                        feed.last_tick = None;
                         feed.publish(&app);
                         feed.timer.stop();
                         return;
@@ -119,6 +173,7 @@ impl Studio {
                     feed.clipped |= left >= 1.0 || right >= 1.0;
                     feed.publish(&app);
                     if !rolling && feed.left.quiet() && feed.right.quiet() {
+                        feed.last_tick = None;
                         feed.timer.stop();
                     }
                 });

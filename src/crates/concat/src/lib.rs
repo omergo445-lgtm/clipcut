@@ -1372,14 +1372,24 @@ fn start(project: Option<std::path::PathBuf>, smoke: Smoke) -> Result<(), slint:
     editor.on_preview_axis_audio_changed(on_window!(|state, on: bool| {
         state.handle(Msg::Timeline(TimelineMsg::PreviewAxisAudioChanged(on)));
     }));
-    // The preview axis: on every move of the pointer across the lanes, so
-    // it publishes the lanes and no more, the way a scrub does.
-    editor.on_hovered(on_lanes!(|state, seconds: f32| {
-        state.handle(Msg::Timeline(TimelineMsg::Hovered(seconds)));
-    }));
-    editor.on_hover_ended(on_lanes!(|state| {
-        state.handle(Msg::Timeline(TimelineMsg::HoverEnded));
-    }));
+    // The preview axis: only touches the preview decoder when preview-axis is
+    // enabled, never rebuilding timeline clips/waveforms on every mouse pixel.
+    editor.on_hovered(move |seconds: f32| {
+        Shell::with(|shell, _| {
+            let mut state = shell.studio.borrow_mut();
+            if state.prefs.preview_axis && !state.playing {
+                state.handle(Msg::Timeline(TimelineMsg::Hovered(seconds)));
+            }
+        });
+    });
+    editor.on_hover_ended(move || {
+        Shell::with(|shell, _| {
+            let mut state = shell.studio.borrow_mut();
+            if state.prefs.preview_axis || state.hover.is_some() {
+                state.handle(Msg::Timeline(TimelineMsg::HoverEnded));
+            }
+        });
+    });
     editor.on_add_track(on_window!(|state, bottom: bool| {
         state.apply(concat_project::Command::AddTrack { bottom });
     }));
@@ -1409,9 +1419,22 @@ fn start(project: Option<std::path::PathBuf>, smoke: Smoke) -> Result<(), slint:
     editor.on_key_mark_moved(on_lanes!(|state, from: f32, to: f32| {
         state.move_keys_at(from, to);
     }));
-    editor.on_scrubbed(on_lanes!(|state, seconds: f32| {
-        state.scrub(seconds);
-    }));
+    editor.on_scrubbed(move |seconds: f32| {
+        Shell::with(|shell, app| {
+            let needs_lanes = {
+                let mut state = shell.studio.borrow_mut();
+                let before_scroll = state.lanes.scroll_left;
+                state.scrub(seconds);
+                state.lanes.centred && (state.lanes.scroll_left - before_scroll).abs() > 1e-4
+            };
+            let state = shell.studio.borrow();
+            if needs_lanes {
+                state.publish_lanes(&app, &shell.models);
+            } else {
+                state.publish_playhead(&app, &shell.models);
+            }
+        });
+    });
     editor.on_finger_held(on_lanes!(|state| {
         state.finger_held();
     }));

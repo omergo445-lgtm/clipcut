@@ -519,13 +519,19 @@ pub fn spawn_frame<T: Send + 'static>(
             move |studio, app, models, result| {
                 let toast = studio.toast.token;
                 then(studio, app, models, result);
+                if studio.playing {
+                    studio.tick_meters_synced(app);
+                    studio.last_frame_presented = Some(std::time::Instant::now());
+                }
                 noted.store(studio.toast.token != toast, Ordering::Relaxed);
             },
             move |studio, app, models| {
-                if studio.playing && !toasted.load(Ordering::Relaxed) {
-                    studio.publish_frame(app);
-                } else {
+                if toasted.load(Ordering::Relaxed) {
                     studio.publish(app, models);
+                } else if studio.playing {
+                    studio.publish_frame_and_playhead(app, models);
+                } else {
+                    studio.publish_frame(app);
                 }
             },
         );

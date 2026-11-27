@@ -209,9 +209,17 @@ impl Studio {
             .set_preview_frame(self.monitor.image.clone());
     }
 
-    /// Lightweight playback tick: updates only the playhead, scroll position,
-    /// active monitor picture state, and stage overlay without rebuilding clip
-    /// waveforms or inspector models 30-60 times per second.
+    /// Coalesced playback present: updates the monitor picture AND the playhead
+    /// in one single Slint property pass so the window only repaints once per
+    /// video frame.
+    pub fn publish_frame_and_playhead(&self, app: &App, models: &Models) {
+        self.publish_frame(app);
+        self.publish_playhead(app, models);
+    }
+
+    /// Lightweight playhead/scrub tick: updates only the playhead, scroll
+    /// position, active monitor picture state, and stage overlay without
+    /// rebuilding clip waveforms or inspector models.
     pub fn publish_playhead(&self, app: &App, models: &Models) {
         let editor = app.global::<Editor>();
         let timeline = self.timeline();
@@ -230,17 +238,24 @@ impl Studio {
             .source
             .as_ref()
             .filter(|source| source.kind != model::MediaKind::Audio);
-        editor.set_has_picture(source.is_some() || showing.is_some());
-        editor.set_preview_clip_name(
-            source
-                .map(|source| source.name.as_str())
-                .or(showing.map(|clip| clip.name.as_str()))
-                .unwrap_or_default()
-                .into(),
-        );
-        editor.set_playing(self.playing);
+        let has_picture = source.is_some() || showing.is_some();
+        if editor.get_has_picture() != has_picture {
+            editor.set_has_picture(has_picture);
+        }
+        let clip_name = source
+            .map(|source| source.name.as_str())
+            .or(showing.map(|clip| clip.name.as_str()))
+            .unwrap_or_default();
+        if editor.get_preview_clip_name().as_str() != clip_name {
+            editor.set_preview_clip_name(clip_name.into());
+        }
+        if editor.get_playing() != self.playing {
+            editor.set_playing(self.playing);
+        }
         editor.set_playhead(self.playhead);
-        editor.set_scroll_left(self.lanes.scroll_left);
+        if (editor.get_scroll_left() - self.lanes.scroll_left).abs() > 1e-5 {
+            editor.set_scroll_left(self.lanes.scroll_left);
+        }
         if !self.selection.is_empty() {
             sync(&models.stage, self.stage_items());
         }

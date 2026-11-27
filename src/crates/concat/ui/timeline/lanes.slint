@@ -1708,7 +1708,7 @@ export component Lanes inherits Rectangle {
         // The grid: one rule per ruler tick, so a clip edge can be read
         // against the ruler without following it all the way up there. Same
         // ladder, same positions — they are the same `tick`.
-        for step in 64: Rectangle {
+        for step in 28: Rectangle {
             property <float> seconds: root.first-tick + step * root.tick;
 
             x: root.at(self.seconds);
@@ -1997,7 +1997,7 @@ export component Lanes inherits Rectangle {
             // width would tear down and rebuild the whole row on every frame
             // of a splitter drag; 64 covers any window at the 90px minimum
             // spacing the ladder guarantees.
-            for step in 64: Rectangle {
+            for step in 28: Rectangle {
                 property <float> seconds: root.first-tick + step * root.tick;
 
                 x: root.at(self.seconds);
@@ -2352,7 +2352,7 @@ export component Lanes inherits Rectangle {
         // phone holds the playhead at its middle, where the button would
         // stand over the clips a tap is aimed at.
         // https://github.com/jub0t/Concat/issues/468
-        if !root.finger && root.at(root.playhead) >= 0px
+        if !root.finger && !Editor.playing && root.at(root.playhead) >= 0px
             && root.at(root.playhead) <= root.width: Rectangle {
             x: root.at(root.playhead) - self.width / 2;
             y: root.ruler-height + 6px;

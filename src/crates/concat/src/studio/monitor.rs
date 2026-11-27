@@ -230,6 +230,7 @@ impl Studio {
         // pointer that happens to be over the lanes must not stay on it.
         self.end_hover();
         self.playing = true;
+        self.last_frame_presented = None;
         log::debug!("playback: playing from {:.3}s", self.playhead);
         self.host.playback.play(f64::from(self.playhead));
         self.wake_meters();
@@ -245,6 +246,7 @@ impl Studio {
             move || {
                 crate::host::Shell::with(|shell, app| {
                     let mut full_publish = false;
+                    let mut fallback_publish = false;
                     {
                         let mut studio = shell.studio.borrow_mut();
                         let end = studio.duration();
@@ -297,12 +299,23 @@ impl Studio {
                             full_publish = true;
                         } else {
                             studio.request_preview();
+                            // Let the arriving preview frame present playhead +
+                            // picture + meters in ONE single GPU redraw. Only
+                            // push a playhead fallback if no frame landed in
+                            // the last 66 ms (e.g. empty timeline gap).
+                            fallback_publish = studio
+                                .last_frame_presented
+                                .is_none_or(|t| t.elapsed() >= std::time::Duration::from_millis(66));
+                            if fallback_publish {
+                                studio.tick_meters_synced(&app);
+                                studio.last_frame_presented = Some(std::time::Instant::now());
+                            }
                         }
                     }
                     let studio = shell.studio.borrow();
                     if full_publish {
                         studio.publish_lanes(&app, &shell.models);
-                    } else {
+                    } else if fallback_publish {
                         studio.publish_playhead(&app, &shell.models);
                     }
                 });
@@ -324,10 +337,12 @@ impl Studio {
         }
         let was_playing = self.playing;
         self.playing = false;
+        self.last_frame_presented = None;
         self.transport.stop();
         self.host.playback.pause();
         // The textures playback streamed through are let go once it stops.
         if was_playing {
+            self.wake_meters_falloff();
             self.host.monitor.shrink();
         }
     }

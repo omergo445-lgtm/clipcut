@@ -113,8 +113,8 @@ use skrifa::{
 
 const HINTER_CACHE_CAPACITY: NonZeroUsize = NonZeroUsize::new(32).unwrap();
 const GLYPH_CACHE_CAPACITY: NonZeroUsize = NonZeroUsize::new(4096).unwrap();
-const ATLAS_DIM: i32 = 1024;
-const MAX_SPRITE_DIM: i32 = 128;
+const ATLAS_DIM: i32 = 512;
+const MAX_SPRITE_DIM: i32 = 96;
 
 #[derive(Clone, Copy)]
 pub struct GlyphSprite {
@@ -172,6 +172,7 @@ impl OutlinePen for SkiaOutlinePen<'_> {
 pub struct GlyphOutlineCache {
     hinters: CLruCache<(HashedBlob, u32, u32, u64), Option<HintingInstance>>,
     glyphs: CLruCache<(HashedBlob, u32, u32, u64, u32), CachedGlyph>,
+    warmed_styles: std::collections::HashSet<(HashedBlob, u32, u32, u64)>,
     atlas_surface: Option<skia_safe::Surface>,
     atlas_snapshot: Option<skia_safe::Image>,
     atlas_generation: u64,
@@ -189,6 +190,7 @@ impl Default for GlyphOutlineCache {
         Self {
             hinters: CLruCache::new(HINTER_CACHE_CAPACITY),
             glyphs: CLruCache::new(GLYPH_CACHE_CAPACITY),
+            warmed_styles: std::collections::HashSet::new(),
             atlas_surface,
             atlas_snapshot: None,
             atlas_generation: 1,
@@ -223,6 +225,57 @@ impl GlyphOutlineCache {
         (size_26_6, snapped_ppem, coords_hash, style_hash, shear)
     }
 
+    /// Pre-packs common ASCII characters the first time a UI font style
+    /// (`<= 20 px`) is drawn, so all timecode digits and labels upload in one
+    /// single 1 MB atlas snapshot instead of dozens of separate uploads.
+    #[allow(clippy::too_many_arguments)]
+    pub fn prewarm_ascii(
+        &mut self,
+        blob: &HashedBlob,
+        font: &parley::FontData,
+        size_26_6: u32,
+        snapped_ppem: f32,
+        normalized_coords: &[i16],
+        coords_hash: u64,
+        style_hash: u64,
+        shear: f32,
+        hinted: bool,
+    ) {
+        if snapped_ppem > 20.0 {
+            return;
+        }
+        let key = (blob.clone(), font.index, size_26_6, style_hash);
+        if !self.warmed_styles.insert(key) {
+            return;
+        }
+        let Ok(font_ref) = FontRef::from_index(font.data.as_ref(), font.index) else {
+            return;
+        };
+        let charmap = font_ref.charmap();
+        let mut gids = [0u32; 72];
+        let mut count = 0usize;
+        for ch in b"0123456789:.-/%ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz" {
+            if let Some(gid) = charmap.map(*ch as u32) {
+                gids[count] = gid.to_u32();
+                count += 1;
+            }
+        }
+        for &gid in &gids[..count] {
+            let _ = self.glyph_outline(
+                blob,
+                font,
+                size_26_6,
+                snapped_ppem,
+                normalized_coords,
+                coords_hash,
+                style_hash,
+                shear,
+                hinted,
+                gid,
+            );
+        }
+    }
+
     pub fn atlas_image(&mut self) -> Option<skia_safe::Image> {
         if let Some(ref img) = self.atlas_snapshot {
             return Some(img.clone());
@@ -253,6 +306,7 @@ impl GlyphOutlineCache {
         }
         if self.shelf_y + h + 1 > ATLAS_DIM {
             self.atlas_generation = self.atlas_generation.wrapping_add(1).max(1);
+            self.warmed_styles.clear();
             self.shelf_x = 1;
             self.shelf_y = 1;
             self.shelf_h = 0;

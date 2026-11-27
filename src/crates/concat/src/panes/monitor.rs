@@ -370,12 +370,20 @@ impl MonitorPane {
         if !refine {
             self.rest.stop();
         }
-        let (width, height) =
-            Self::frame_size(self.quality_of(studio.project()), studio.output_size());
+        let quality = self.quality_of(studio.project());
+        let (mut width, mut height) = Self::frame_size(quality, studio.output_size());
+        if studio.prefs.turbo_preview.unwrap_or(true) && (moving || nearest) && quality > 0 {
+            let max_side = if quality >= 2 { 480u32 } else { 720u32 };
+            let longest = width.max(height);
+            if longest > max_side {
+                let s = f64::from(max_side) / f64::from(longest);
+                width = ((f64::from(width) * s).round() as u32).max(2) & !1;
+                height = ((f64::from(height) * s).round() as u32).max(2) & !1;
+            }
+        }
         let Some((clips, settings)) = studio.preview_clips() else {
             return;
         };
-        let quality = self.quality_of(studio.project());
         let spec = FrameSpec {
             time: f64::from(time),
             width,

@@ -1128,117 +1128,147 @@ impl GlyphRenderer for SkiaItemRenderer<'_> {
             && brush.paint.style() == skia_safe::PaintStyle::Fill;
         let solid_color = brush.solid_color.unwrap_or(skia_safe::Color::WHITE);
 
-        let mut xforms: Vec<skia_safe::RSXform> = Vec::new();
-        let mut tex_rects: Vec<skia_safe::Rect> = Vec::new();
-        let mut colors: Vec<skia_safe::Color> = Vec::new();
+        thread_local! {
+            static GLYPH_SCRATCH: std::cell::RefCell<(
+                Vec<skia_safe::RSXform>,
+                Vec<skia_safe::Rect>,
+                Vec<skia_safe::Color>,
+                Vec<(skia_safe::GlyphId, skia_safe::Point)>,
+            )> = std::cell::RefCell::new((
+                Vec::with_capacity(64),
+                Vec::with_capacity(64),
+                Vec::with_capacity(64),
+                Vec::new(),
+            ));
+        }
+
         let mut run_builder =
             skia_safe::PathBuilder::new_with_fill_type(skia_safe::PathFillType::Winding);
-        let mut fallback_glyphs: Vec<(skia_safe::GlyphId, skia_safe::Point)> = Vec::new();
         let y_off = y_offset.get();
 
-        let atlas_img = crate::font_cache::GLYPH_OUTLINE_CACHE.with_borrow_mut(|outline_cache| {
-            for g in glyphs_it {
-                let gx = if dense { g.x } else { g.x.round() };
-                let gy = if dense { g.y + y_off } else { (g.y + y_off).round() };
-                match outline_cache.glyph_outline(
-                    &blob,
-                    font,
-                    size_26_6,
-                    snapped_ppem,
-                    normalized_coords,
-                    coords_hash,
-                    style_hash,
-                    shear,
-                    hinted,
-                    g.id,
-                ) {
-                    crate::font_cache::CachedGlyph::Sprite { path, sprite } => {
-                        if can_use_atlas {
-                            xforms.push(skia_safe::RSXform::new(
-                                1.0,
-                                0.0,
-                                (gx + sprite.offset_x, gy + sprite.offset_y),
-                            ));
-                            tex_rects.push(sprite.uv);
-                            colors.push(solid_color);
-                        } else {
-                            run_builder.add_path_with_offset(&path, (g.x, gy), None);
+        GLYPH_SCRATCH.with_borrow_mut(|(xforms, tex_rects, colors, fallback_glyphs)| {
+            xforms.clear();
+            tex_rects.clear();
+            colors.clear();
+            fallback_glyphs.clear();
+
+            let atlas_img = crate::font_cache::GLYPH_OUTLINE_CACHE.with_borrow_mut(|outline_cache| {
+                if can_use_atlas {
+                    outline_cache.prewarm_ascii(
+                        &blob,
+                        font,
+                        size_26_6,
+                        snapped_ppem,
+                        normalized_coords,
+                        coords_hash,
+                        style_hash,
+                        shear,
+                        hinted,
+                    );
+                }
+                for g in glyphs_it {
+                    let gx = if dense { g.x } else { g.x.round() };
+                    let gy = if dense { g.y + y_off } else { (g.y + y_off).round() };
+                    match outline_cache.glyph_outline(
+                        &blob,
+                        font,
+                        size_26_6,
+                        snapped_ppem,
+                        normalized_coords,
+                        coords_hash,
+                        style_hash,
+                        shear,
+                        hinted,
+                        g.id,
+                    ) {
+                        crate::font_cache::CachedGlyph::Sprite { path, sprite } => {
+                            if can_use_atlas {
+                                xforms.push(skia_safe::RSXform::new(
+                                    1.0,
+                                    0.0,
+                                    (gx + sprite.offset_x, gy + sprite.offset_y),
+                                ));
+                                tex_rects.push(sprite.uv);
+                                colors.push(solid_color);
+                            } else {
+                                run_builder.add_path_with_offset(&path, (g.x, gy), None);
+                            }
+                        }
+                        crate::font_cache::CachedGlyph::Path(glyph_path) => {
+                            run_builder.add_path_with_offset(&glyph_path, (g.x, gy), None);
+                        }
+                        crate::font_cache::CachedGlyph::Blank => {}
+                        crate::font_cache::CachedGlyph::ColorOrBitmapFallback => {
+                            fallback_glyphs
+                                .push((g.id as skia_safe::GlyphId, skia_safe::Point::new(g.x, gy)));
                         }
                     }
-                    crate::font_cache::CachedGlyph::Path(glyph_path) => {
-                        run_builder.add_path_with_offset(&glyph_path, (g.x, gy), None);
-                    }
-                    crate::font_cache::CachedGlyph::Blank => {}
-                    crate::font_cache::CachedGlyph::ColorOrBitmapFallback => {
-                        fallback_glyphs
-                            .push((g.id as skia_safe::GlyphId, skia_safe::Point::new(g.x, gy)));
-                    }
                 }
+                if !xforms.is_empty() {
+                    outline_cache.atlas_image()
+                } else {
+                    None
+                }
+            });
+
+            if !xforms.is_empty()
+                && let Some(atlas) = atlas_img
+            {
+                let sampling = skia_safe::SamplingOptions::new(
+                    if dense {
+                        skia_safe::FilterMode::Linear
+                    } else {
+                        skia_safe::FilterMode::Nearest
+                    },
+                    skia_safe::MipmapMode::None,
+                );
+                let mut atlas_paint = skia_safe::Paint::default();
+                atlas_paint.set_alpha_f(brush.paint.alpha_f());
+                if let Some(bm) = brush.paint.as_blend_mode() {
+                    atlas_paint.set_blend_mode(bm);
+                }
+                self.canvas.draw_atlas(
+                    &atlas,
+                    xforms.as_slice(),
+                    tex_rects.as_slice(),
+                    Some(colors.as_slice()),
+                    skia_safe::BlendMode::Modulate,
+                    sampling,
+                    None,
+                    Some(&atlas_paint),
+                );
             }
-            if !xforms.is_empty() {
-                outline_cache.atlas_image()
-            } else {
-                None
+
+            if !run_builder.is_empty() {
+                let run_path = run_builder.detach();
+                let mut paint = brush.paint.clone();
+                paint.set_anti_alias(true);
+                if synthesis.embolden() && paint.style() == skia_safe::PaintStyle::Fill {
+                    paint.set_style(skia_safe::PaintStyle::StrokeAndFill);
+                    paint.set_stroke_width((snapped_ppem * 0.03).max(0.4));
+                    paint.set_stroke_join(skia_safe::PaintJoin::Round);
+                }
+                self.canvas.draw_path(&run_path, &paint);
+            }
+
+            if !fallback_glyphs.is_empty()
+                && let Some(type_face) = crate::font_cache::FONT_CACHE
+                    .with_borrow_mut(|font_cache| font_cache.font_with_variations(font, synthesis))
+            {
+                let mut sk_font = skia_safe::Font::from_typeface(type_face, font_size.get());
+                sk_font.set_subpixel(dense);
+                sk_font.set_edging(skia_safe::font::Edging::AntiAlias);
+                let (glyph_ids, glyph_positions): (Vec<_>, Vec<_>) =
+                    fallback_glyphs.iter().copied().unzip();
+                self.canvas.draw_glyphs_at(
+                    &glyph_ids,
+                    skia_safe::canvas::GlyphPositions::Points(&glyph_positions),
+                    skia_safe::Point::default(),
+                    &sk_font,
+                    &brush.paint,
+                );
             }
         });
-
-        if !xforms.is_empty()
-            && let Some(atlas) = atlas_img
-        {
-            let sampling = skia_safe::SamplingOptions::new(
-                if dense {
-                    skia_safe::FilterMode::Linear
-                } else {
-                    skia_safe::FilterMode::Nearest
-                },
-                skia_safe::MipmapMode::None,
-            );
-            let mut atlas_paint = skia_safe::Paint::default();
-            atlas_paint.set_alpha_f(brush.paint.alpha_f());
-            if let Some(bm) = brush.paint.as_blend_mode() {
-                atlas_paint.set_blend_mode(bm);
-            }
-            self.canvas.draw_atlas(
-                &atlas,
-                &xforms,
-                &tex_rects,
-                Some(colors.as_slice()),
-                skia_safe::BlendMode::Modulate,
-                sampling,
-                None,
-                Some(&atlas_paint),
-            );
-        }
-
-        if !run_builder.is_empty() {
-            let run_path = run_builder.detach();
-            let mut paint = brush.paint.clone();
-            paint.set_anti_alias(true);
-            if synthesis.embolden() && paint.style() == skia_safe::PaintStyle::Fill {
-                paint.set_style(skia_safe::PaintStyle::StrokeAndFill);
-                paint.set_stroke_width((snapped_ppem * 0.03).max(0.4));
-                paint.set_stroke_join(skia_safe::PaintJoin::Round);
-            }
-            self.canvas.draw_path(&run_path, &paint);
-        }
-
-        if !fallback_glyphs.is_empty()
-            && let Some(type_face) = crate::font_cache::FONT_CACHE
-                .with_borrow_mut(|font_cache| font_cache.font_with_variations(font, synthesis))
-        {
-            let mut sk_font = skia_safe::Font::from_typeface(type_face, font_size.get());
-            sk_font.set_subpixel(dense);
-            sk_font.set_edging(skia_safe::font::Edging::AntiAlias);
-            let (glyph_ids, glyph_positions): (Vec<_>, Vec<_>) =
-                fallback_glyphs.into_iter().unzip();
-            self.canvas.draw_glyphs_at(
-                &glyph_ids,
-                skia_safe::canvas::GlyphPositions::Points(&glyph_positions),
-                skia_safe::Point::default(),
-                &sk_font,
-                &brush.paint,
-            );
-        }
     }
 
     fn fill_rectangle(

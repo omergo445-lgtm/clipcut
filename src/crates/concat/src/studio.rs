@@ -1375,6 +1375,9 @@ pub struct Studio {
     pub copied_attributes: Option<Clip>,
     pub chapters_clipboard: String,
     pub chapters_clipboard_token: i32,
+    /// Last time a decoded playback frame was presented to the window, used to
+    /// coalesce playhead + preview frame + VU meters into a single repaint.
+    pub last_frame_presented: Option<std::time::Instant>,
 }
 
 // ── conversions between the document and the window ─────────────────────
@@ -3243,6 +3246,7 @@ impl Studio {
             copied_attributes: None,
             chapters_clipboard: String::new(),
             chapters_clipboard_token: 0,
+            last_frame_presented: None,
             host,
         };
         studio.handle(crate::panes::Msg::Settings(
