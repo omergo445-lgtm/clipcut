@@ -196,7 +196,7 @@ export component BezierEditor inherits Rectangle {
         background: Theme.accent;
         border-width: 1.5px;
         border-color: fs1.has-focus ? Theme.clip-ink : Theme.panel;
-        animate width { duration: 120ms; easing: cubic-bezier(0.4, 0, 0.2, 1); }
+        animate width { duration: Theme.anim-fast; easing: cubic-bezier(0.4, 0, 0.2, 1); }
     }
     Rectangle {
         property <bool> lit: root.grabbed == 1 || fs2.has-focus || surface.near == 1;
@@ -208,7 +208,7 @@ export component BezierEditor inherits Rectangle {
         background: Theme.accent;
         border-width: 1.5px;
         border-color: fs2.has-focus ? Theme.clip-ink : Theme.panel;
-        animate width { duration: 120ms; easing: cubic-bezier(0.4, 0, 0.2, 1); }
+        animate width { duration: Theme.anim-fast; easing: cubic-bezier(0.4, 0, 0.2, 1); }
     }
 
     // One drag surface for the whole canvas rather than a hit area per handle:

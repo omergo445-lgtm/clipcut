@@ -89,14 +89,14 @@ component LibraryTab inherits Rectangle {
     // pointer.
     background: root.current ? Theme.field : Colors.transparent;
 
-    animate background { duration: 120ms; easing: cubic-bezier(0.4, 0, 0.2, 1); }
+    animate background { duration: Theme.anim-fast; easing: cubic-bezier(0.4, 0, 0.2, 1); }
 
     // The mark and the label share one tint, so a chip lights up as one thing
     // under the pointer and not as a glyph that answers and a word that
     // follows.
     property <brush> tint: (root.current || touch.has-hover) ? Theme.fg : Theme.fg-muted;
 
-    animate tint { duration: 140ms; easing: cubic-bezier(0.4, 0, 0.2, 1); }
+    animate tint { duration: Theme.anim-fast; easing: cubic-bezier(0.4, 0, 0.2, 1); }
 
     // Two lines in the 40px a chip gets inside the strip: 13px of mark, 2px of
     // air, then the label at fs-sm, with 6px above and below so the two
@@ -207,7 +207,7 @@ component CategoryHeading inherits Rectangle {
     border-radius: Theme.r-sm;
     background: heading.has-hover ? Theme.field : Colors.transparent;
 
-    animate background { duration: 100ms; easing: cubic-bezier(0.4, 0, 0.2, 1); }
+    animate background { duration: Theme.anim-fast; easing: cubic-bezier(0.4, 0, 0.2, 1); }
 
     HorizontalLayout {
         padding-left: 6px;
@@ -257,7 +257,7 @@ component CategoryRow inherits Rectangle {
         : touch.has-hover ? Theme.field
         : Colors.transparent;
 
-    animate background { duration: 100ms; easing: cubic-bezier(0.4, 0, 0.2, 1); }
+    animate background { duration: Theme.anim-fast; easing: cubic-bezier(0.4, 0, 0.2, 1); }
 
     HorizontalLayout {
         // Indented past the group heading's chevron, so the rows read as
@@ -350,7 +350,7 @@ component ImportButton inherits Rectangle {
     background: root.ground;
     opacity: root.busy ? 0.4 : 1.0;
 
-    animate background, border-color { duration: 120ms; easing: cubic-bezier(0.4, 0, 0.2, 1); }
+    animate background, border-color { duration: Theme.anim-fast; easing: cubic-bezier(0.4, 0, 0.2, 1); }
 
     HorizontalLayout {
         alignment: center;
@@ -1373,7 +1373,7 @@ component CategoryPill inherits Rectangle {
         : touch.has-hover ? Theme.field-hover
         : Theme.field;
 
-    animate background { duration: 120ms; easing: cubic-bezier(0.4, 0, 0.2, 1); }
+    animate background { duration: Theme.anim-fast; easing: cubic-bezier(0.4, 0, 0.2, 1); }
 
     HorizontalLayout {
         padding-left: 10px;
@@ -2002,7 +2002,7 @@ export component MediaPane inherits Rectangle {
                         content-width: Math.max(self.width, chips.preferred-width);
                         content-height: self.height;
 
-                        animate content-x { duration: 180ms; easing: cubic-bezier(0.4, 0, 0.2, 1); }
+                        animate content-x { duration: Theme.anim-fast; easing: cubic-bezier(0.4, 0, 0.2, 1); }
 
                         // A seat widened while the strip was scrolled would
                         // keep the chips pushed left of a track that now

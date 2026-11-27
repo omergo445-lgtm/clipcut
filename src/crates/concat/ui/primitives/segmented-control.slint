@@ -139,7 +139,7 @@ export component SegmentedControl inherits Rectangle {
             vertical-alignment: center;
             overflow: elide;
 
-            animate color { duration: 140ms; easing: cubic-bezier(0.4, 0, 0.2, 1); }
+            animate color { duration: Theme.anim-fast; easing: cubic-bezier(0.4, 0, 0.2, 1); }
         }
         if index < root.icons.length: Icon {
             x: (parent.width - self.width) / 2;

@@ -233,7 +233,7 @@ component ModelRow inherits Rectangle {
     // stops being readable — it is a thing you can have, not a thing denied.
     opacity: (root.model.installed || root.model.downloading) ? 1.0 : 0.86;
 
-    animate background, border-color { duration: 120ms; easing: cubic-bezier(0.4, 0, 0.2, 1); }
+    animate background, border-color { duration: Theme.anim-fast; easing: cubic-bezier(0.4, 0, 0.2, 1); }
 
     touch := TouchArea {
         // Only an installed model is a choice. An absent one is acquired with
@@ -267,7 +267,7 @@ component ModelRow inherits Rectangle {
                         : Theme.field-active;
 
                     animate border-width, border-color {
-                        duration: 120ms;
+                        duration: Theme.anim-fast;
                         easing: cubic-bezier(0.4, 0, 0.2, 1);
                     }
                 }
@@ -427,7 +427,7 @@ component AccentSwatch inherits Rectangle {
     accessible-role: button;
     accessible-label: root.label;
 
-    animate border-color { duration: 120ms; easing: cubic-bezier(0.4, 0, 0.2, 1); }
+    animate border-color { duration: Theme.anim-fast; easing: cubic-bezier(0.4, 0, 0.2, 1); }
 
     Rectangle {
         width: 16px;
@@ -435,7 +435,7 @@ component AccentSwatch inherits Rectangle {
         border-radius: 8px;
         background: root.colour;
 
-        animate background { duration: 120ms; easing: cubic-bezier(0.4, 0, 0.2, 1); }
+        animate background { duration: Theme.anim-fast; easing: cubic-bezier(0.4, 0, 0.2, 1); }
 
         if root.blank: Icon {
             glyph: Glyph.plus;
@@ -464,7 +464,7 @@ component PageTab inherits Rectangle {
         : touch.has-hover ? Theme.field
         : Colors.transparent;
 
-    animate background { duration: 100ms; easing: cubic-bezier(0.4, 0, 0.2, 1); }
+    animate background { duration: Theme.anim-fast; easing: cubic-bezier(0.4, 0, 0.2, 1); }
 
     HorizontalLayout {
         padding-left: 10px;
@@ -559,7 +559,7 @@ component ShortcutRow inherits Rectangle {
         : touch.has-hover ? Theme.field
         : Colors.transparent;
 
-    animate background { duration: 100ms; easing: cubic-bezier(0.4, 0, 0.2, 1); }
+    animate background { duration: Theme.anim-fast; easing: cubic-bezier(0.4, 0, 0.2, 1); }
 
     // The row's press under its contents, not over them: a TouchArea
     // drawn last covers the reset, and its press then listened for a

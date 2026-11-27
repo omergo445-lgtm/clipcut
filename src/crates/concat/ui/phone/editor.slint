@@ -129,7 +129,7 @@ component SheetButton inherits Rectangle {
         ? (touch.pressed ? Theme.accent-hover : Theme.accent)
         : (touch.pressed ? Theme.field-active : Theme.field);
 
-    animate background { duration: 100ms; easing: cubic-bezier(0.4, 0, 0.2, 1); }
+    animate background { duration: Theme.anim-fast; easing: cubic-bezier(0.4, 0, 0.2, 1); }
 
     HorizontalLayout {
         alignment: center;
@@ -546,7 +546,7 @@ export component PhoneEditor inherits Rectangle {
                     border-radius: Theme.r;
                     background: export-touch.pressed ? Theme.accent-hover : Theme.accent;
 
-                    animate background { duration: 100ms; easing: cubic-bezier(0.4, 0, 0.2, 1); }
+                    animate background { duration: Theme.anim-fast; easing: cubic-bezier(0.4, 0, 0.2, 1); }
 
                     HorizontalLayout {
                         alignment: center;

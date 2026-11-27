@@ -193,7 +193,7 @@ export component Rail inherits Rectangle {
         background: Theme.well;
 
         animate height, border-color {
-            duration: 160ms;
+            duration: Theme.anim-fast;
             easing: cubic-bezier(0.16, 1, 0.3, 1);
         }
 
@@ -362,7 +362,7 @@ export component HelpButton inherits Rectangle {
         border-radius: 8px;
         background: touch.has-hover ? Theme.accent-soft : Theme.field;
 
-        animate background { duration: 100ms; easing: cubic-bezier(0.4, 0, 0.2, 1); }
+        animate background { duration: Theme.anim-fast; easing: cubic-bezier(0.4, 0, 0.2, 1); }
 
         Text {
             x: (parent.width - self.width) / 2;
@@ -593,7 +593,7 @@ export component Check inherits Rectangle {
     background: root.checked ? Theme.accent : Theme.field-active;
     opacity: root.enabled ? 1.0 : 0.45;
 
-    animate background { duration: 120ms; easing: cubic-bezier(0.4, 0, 0.2, 1); }
+    animate background { duration: Theme.anim-fast; easing: cubic-bezier(0.4, 0, 0.2, 1); }
 
     if root.checked: Icon {
         x: (parent.width - self.width) / 2;
@@ -698,7 +698,7 @@ export component ResetButton inherits Rectangle {
     background: touch.has-hover && root.dirty ? Theme.field-hover : Theme.field;
     opacity: root.dirty ? 1.0 : 0.4;
 
-    animate background { duration: 100ms; easing: cubic-bezier(0.4, 0, 0.2, 1); }
+    animate background { duration: Theme.anim-fast; easing: cubic-bezier(0.4, 0, 0.2, 1); }
 
     Icon {
         glyph: Glyph.reset;
@@ -750,7 +750,7 @@ export component SearchField inherits Rectangle {
     border-width: 1px;
     border-color: input.has-focus ? Theme.accent : Colors.transparent;
 
-    animate background, border-color { duration: 120ms; easing: cubic-bezier(0.4, 0, 0.2, 1); }
+    animate background, border-color { duration: Theme.anim-fast; easing: cubic-bezier(0.4, 0, 0.2, 1); }
 
     // Under everything, so the pointer can light the field without taking
     // a click from the input or the clear button.
@@ -930,7 +930,7 @@ export component ColourField inherits HorizontalLayout {
             border-width: 1px;
             border-color: input.has-focus ? Theme.accent : Colors.transparent;
 
-            animate background, border-color { duration: 100ms; easing: cubic-bezier(0.4, 0, 0.2, 1); }
+            animate background, border-color { duration: Theme.anim-fast; easing: cubic-bezier(0.4, 0, 0.2, 1); }
 
             HorizontalLayout {
                 Rectangle {

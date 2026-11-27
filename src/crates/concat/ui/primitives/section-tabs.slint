@@ -74,7 +74,7 @@ export component SectionTabs inherits Rectangle {
             border-radius: Theme.r-sm;
             background: segment.has-hover && !tab.on ? Theme.field-hover : transparent;
 
-            animate background { duration: 120ms; }
+            animate background { duration: Theme.anim-fast; }
         }
 
         HorizontalLayout {
@@ -99,7 +99,7 @@ export component SectionTabs inherits Rectangle {
                 vertical-alignment: center;
                 overflow: elide;
 
-                animate color { duration: 140ms; easing: cubic-bezier(0.4, 0, 0.2, 1); }
+                animate color { duration: Theme.anim-fast; easing: cubic-bezier(0.4, 0, 0.2, 1); }
             }
         }
 
@@ -121,7 +121,7 @@ export component SectionTabs inherits Rectangle {
         border-radius: 1px;
         background: Theme.accent;
 
-        animate x, width { duration: 220ms; easing: cubic-bezier(0.16, 1, 0.3, 1); }
+        animate x, width { duration: Theme.anim-fast; easing: cubic-bezier(0.16, 1, 0.3, 1); }
     }
 
     FocusRing {

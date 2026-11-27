@@ -181,7 +181,7 @@ component FrameShape inherits Rectangle {
         border-width: 1px;
         border-color: root.tint;
 
-        animate width, height { duration: 160ms; easing: cubic-bezier(0.4, 0, 0.2, 1); }
+        animate width, height { duration: Theme.anim-fast; easing: cubic-bezier(0.4, 0, 0.2, 1); }
     }
 }
 
@@ -277,7 +277,7 @@ component LinkButton inherits Rectangle {
     height: 20px;
     opacity: root.enabled ? (touch.has-hover ? 0.7 : 1.0) : 0.4;
 
-    animate opacity { duration: 100ms; easing: cubic-bezier(0.4, 0, 0.2, 1); }
+    animate opacity { duration: Theme.anim-fast; easing: cubic-bezier(0.4, 0, 0.2, 1); }
 
     text := Text {
         x: 0;
@@ -331,7 +331,7 @@ component Chip inherits Rectangle {
     border-color: root.selected || root.lit ? Theme.line-strong : Theme.line;
     opacity: root.enabled ? 1.0 : 0.45;
 
-    animate background, border-color { duration: 140ms; easing: cubic-bezier(0.4, 0, 0.2, 1); }
+    animate background, border-color { duration: Theme.anim-fast; easing: cubic-bezier(0.4, 0, 0.2, 1); }
 
     HorizontalLayout {
         alignment: center;
@@ -357,7 +357,7 @@ component Chip inherits Rectangle {
             font-weight: Theme.weight-title;
             vertical-alignment: center;
 
-            animate color { duration: 140ms; easing: cubic-bezier(0.4, 0, 0.2, 1); }
+            animate color { duration: Theme.anim-fast; easing: cubic-bezier(0.4, 0, 0.2, 1); }
         }
     }
 
@@ -590,7 +590,7 @@ component PillButton inherits Rectangle {
     border-color: root.lit ? Theme.line-strong : Theme.line;
     opacity: root.enabled ? 1.0 : 0.4;
 
-    animate background, border-color { duration: 140ms; easing: cubic-bezier(0.4, 0, 0.2, 1); }
+    animate background, border-color { duration: Theme.anim-fast; easing: cubic-bezier(0.4, 0, 0.2, 1); }
 
     HorizontalLayout {
         alignment: center;
@@ -643,7 +643,7 @@ component BarAction inherits Rectangle {
     accessible-label: root.label;
     accessible-action-default => { root.clicked(); }
 
-    animate background, border-color { duration: 140ms; easing: cubic-bezier(0.4, 0, 0.2, 1); }
+    animate background, border-color { duration: Theme.anim-fast; easing: cubic-bezier(0.4, 0, 0.2, 1); }
 
     Icon {
         x: (parent.width - self.width) / 2;
@@ -753,7 +753,7 @@ component CreateTile inherits Pressable {
         : (root.lit ? Theme.launch-raised : Theme.launch-panel);
     opacity: root.enabled ? 1.0 : 0.45;
 
-    animate background { duration: 120ms; easing: cubic-bezier(0.4, 0, 0.2, 1); }
+    animate background { duration: Theme.anim-fast; easing: cubic-bezier(0.4, 0, 0.2, 1); }
 
     HorizontalLayout {
         padding-left: 20px;
@@ -847,7 +847,7 @@ component PosterAction inherits Rectangle {
     accessible-label: root.label;
     accessible-action-default => { root.clicked(); }
 
-    animate background { duration: 100ms; }
+    animate background { duration: Theme.anim-fast; }
 
     Icon {
         x: (parent.width - self.width) / 2;
@@ -901,7 +901,7 @@ component PosterCard inherits Pressable {
     radius: 22px;
     background: root.lit ? Theme.launch-raised : Theme.launch-raised.with-alpha(0);
 
-    animate background { duration: 120ms; easing: cubic-bezier(0.4, 0, 0.2, 1); }
+    animate background { duration: Theme.anim-fast; easing: cubic-bezier(0.4, 0, 0.2, 1); }
 
     poster := Rectangle {
         x: root.inset;
@@ -1223,7 +1223,7 @@ component SearchField inherits Rectangle {
         : touch.has-hover ? Theme.line-strong
         : root.sunken ? Theme.line.with-alpha(0) : Theme.line;
 
-    animate border-color { duration: 120ms; }
+    animate border-color { duration: Theme.anim-fast; }
 
     touch := TouchArea {
         mouse-cursor: MouseCursor.text;
@@ -1324,7 +1324,7 @@ component SideButton inherits Pressable {
     opacity: root.enabled ? 1.0 : 0.45;
 
     animate background, border-color, drop-shadow-blur, drop-shadow-color {
-        duration: 180ms;
+        duration: Theme.anim-fast;
         easing: cubic-bezier(0.16, 1, 0.3, 1);
     }
 
@@ -1335,7 +1335,7 @@ component SideButton inherits Pressable {
         padding-right: 12px;
         spacing: 9px;
 
-        animate y { duration: 120ms; easing: cubic-bezier(0.16, 1, 0.3, 1); }
+        animate y { duration: Theme.anim-fast; easing: cubic-bezier(0.16, 1, 0.3, 1); }
 
         VerticalLayout {
             alignment: center;
@@ -1369,7 +1369,7 @@ component SideLink inherits Pressable {
     height: 34px;
     background: root.lit || root.down ? Theme.launch-raised : Colors.transparent;
 
-    animate background { duration: 160ms; easing: cubic-bezier(0.16, 1, 0.3, 1); }
+    animate background { duration: Theme.anim-fast; easing: cubic-bezier(0.16, 1, 0.3, 1); }
 
     HorizontalLayout {
         padding-left: 10px;
@@ -1482,7 +1482,7 @@ component SortSwitch inherits Rectangle {
         border-radius: 9px;
         background: Theme.launch-field;
 
-        animate x { duration: 180ms; easing: cubic-bezier(0.4, 0, 0.2, 1); }
+        animate x { duration: Theme.anim-fast; easing: cubic-bezier(0.4, 0, 0.2, 1); }
     }
 
     one := Text {
@@ -1497,7 +1497,7 @@ component SortSwitch inherits Rectangle {
         horizontal-alignment: center;
         vertical-alignment: center;
 
-        animate color { duration: 140ms; easing: cubic-bezier(0.4, 0, 0.2, 1); }
+        animate color { duration: Theme.anim-fast; easing: cubic-bezier(0.4, 0, 0.2, 1); }
     }
 
     two := Text {
@@ -1512,7 +1512,7 @@ component SortSwitch inherits Rectangle {
         horizontal-alignment: center;
         vertical-alignment: center;
 
-        animate color { duration: 140ms; easing: cubic-bezier(0.4, 0, 0.2, 1); }
+        animate color { duration: Theme.anim-fast; easing: cubic-bezier(0.4, 0, 0.2, 1); }
     }
 
     touch-one := TouchArea {

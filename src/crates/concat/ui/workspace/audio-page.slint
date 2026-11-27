@@ -147,7 +147,7 @@ export component SoundRow inherits Rectangle {
         : card.has-hover ? Theme.field : Colors.transparent;
     opacity: drag.dragging ? 0.45 : 1.0;
 
-    animate background { duration: 100ms; easing: cubic-bezier(0.4, 0, 0.2, 1); }
+    animate background { duration: Theme.anim-fast; easing: cubic-bezier(0.4, 0, 0.2, 1); }
 
     drag := DragArea {
         data: Payload.of(root.payload);
@@ -299,7 +299,7 @@ export component VoiceRow inherits Rectangle {
     border-radius: Theme.r;
     background: card.has-hover ? Theme.field : Colors.transparent;
 
-    animate background { duration: 100ms; easing: cubic-bezier(0.4, 0, 0.2, 1); }
+    animate background { duration: Theme.anim-fast; easing: cubic-bezier(0.4, 0, 0.2, 1); }
 
     card := TouchArea {
         mouse-cursor: pointer;

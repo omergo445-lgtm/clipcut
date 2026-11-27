@@ -70,7 +70,7 @@ export component NumberField inherits Rectangle {
     opacity: root.enabled ? 1.0 : 0.45;
     background: (ti.has-focus || (scrub.has-hover && root.enabled)) ? Theme.field-hover : Theme.field;
 
-    animate background { duration: 120ms; easing: cubic-bezier(0.4, 0, 0.2, 1); }
+    animate background { duration: Theme.anim-fast; easing: cubic-bezier(0.4, 0, 0.2, 1); }
 
     // The TextInput's own `text` binding is dropped the first time it is
     // assigned, so keep it in step with the value explicitly from here on.

@@ -55,7 +55,7 @@ export component ThinScrollbar inherits Rectangle {
         border-radius: 2px;
         background: (grab.pressed || grab.has-hover) ? Theme.fg-dim : Theme.line-strong;
 
-        animate background { duration: 100ms; easing: cubic-bezier(0.4, 0, 0.2, 1); }
+        animate background { duration: Theme.anim-fast; easing: cubic-bezier(0.4, 0, 0.2, 1); }
     }
 
     // Over the whole gutter rather than the thumb: the thumb moves as it is
@@ -134,7 +134,7 @@ export component ThinHScrollbar inherits Rectangle {
         border-radius: self.height / 2;
         background: (grab.pressed || grab.has-hover) ? Theme.fg-dim : Theme.line-strong;
 
-        animate background { duration: 100ms; easing: cubic-bezier(0.4, 0, 0.2, 1); }
+        animate background { duration: Theme.anim-fast; easing: cubic-bezier(0.4, 0, 0.2, 1); }
     }
 
     grab := TouchArea {
