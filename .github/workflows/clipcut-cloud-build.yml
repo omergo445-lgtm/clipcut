@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Free disk space and add up to 34 GB swap
         run: |
@@ -46,7 +46,7 @@ jobs:
           df -h / /mnt || df -h /
 
       - name: Cache Cargo registry
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             /tmp/clipcut-cargo-home/registry/index
@@ -57,7 +57,7 @@ jobs:
             clipcut-cargo-reg-
 
       - name: Cache compiled Arch Rust dependencies
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: /tmp/clipcut-target
           key: clipcut-arch-target-v2-${{ hashFiles('src/Cargo.lock', 'src/Cargo.toml', 'src/patches/i-slint-renderer-skia/**', 'src/patches/whisper-rs-sys/build.rs') }}
