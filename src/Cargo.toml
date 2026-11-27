@@ -150,7 +150,7 @@ debug = 0
 
 [profile.cloud.package.concat]
 opt-level = 1
-codegen-units = 4
+codegen-units = 64
 
 # Decoding and compositing are unusably slow in an unoptimised build, even when
 # the rest of the engine is being debugged.

@@ -68,7 +68,11 @@ jobs:
       - name: Build ClipCut binary in Arch Linux container
         run: |
           mkdir -p /tmp/clipcut-cargo-home /tmp/clipcut-target
+          # Reserve headroom for the GitHub runner agent so swap pressure can never
+          # disconnect the VM while LLVM optimizes the Slint UI crate.
           docker run --rm \
+            --memory=13g \
+            --memory-swap=45g \
             -v "${{ github.workspace }}:/work" \
             -v "/tmp/clipcut-cargo-home:/cargo-home" \
             -v "/tmp/clipcut-target:/cargo-target" \
@@ -106,7 +110,8 @@ jobs:
                 -p concat-export \
                 -p concat-server
 
-              # Build Slint dependencies + the 970k-line UI binary with bounded concurrency
+              # Build Slint deps + the UI binary with bounded concurrency
+              # (concat uses codegen-units=64 in [profile.cloud.package.concat] to keep peak LLVM RAM low)
               CARGO_BUILD_JOBS=2 cargo build --profile cloud --bin concat
 
               cp /cargo-target/cloud/concat /work/clipcut-bin
