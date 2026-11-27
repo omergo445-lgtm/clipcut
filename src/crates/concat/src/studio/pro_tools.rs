@@ -619,6 +619,7 @@ impl Studio {
                 .clips
                 .iter()
                 .filter(|c| c.track_id == track.id)
+                .map(AsRef::as_ref)
                 .collect();
             track_clips.sort_by(|a, b| a.start.total_cmp(&b.start));
             let mut cursor = 0.0_f64;
@@ -728,7 +729,7 @@ impl Studio {
             .filter_map(|id| self.clip(id).map(|c| c.track_id.clone()))
             .collect();
 
-        let incoming_clips: Vec<Clip> = self
+        let incoming_clips: Vec<Arc<Clip>> = self
             .timeline()
             .clips
             .iter()
